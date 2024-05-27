@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 import torchvision.transforms as transforms
 import torchvision.models as models
+import threading
 from datetime import datetime
 from ultralytics import YOLO
 from PIL import Image
@@ -30,6 +31,8 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
     QAbstractItemView
 )
+from PySide6.QtGui import QPixmap, QIcon
+from PySide6.QtCore import Qt, QTimer, QThread, Signal, Slot
 
 
 def show_output(frame):
@@ -77,36 +80,36 @@ def data_and_time():
     date = datetime.now()
     return str(date.strftime('%Y-%m-%d %H-%M-%S'))
 
-def check_duplicated_plate_numbers_no(csv_file_path,data):
+def check_duplicated_plate_numbers_no(csv_file_path,vehicleplate):
     # Read existing data from CSV file
     no = 0
     with open(csv_file_path, 'r', newline='') as csvfile:
         reader = csv.reader(csvfile)
-        for row in reader:
-            if row[1] == data[0]:
-                return [False,0]
+        for col in reader:
+            if col[1] == vehicleplate:
+                return False,0
             no+=1      
             
-        return [True,no]       
+        return True,no   
     
-def insert_csv(data,csv_path):
+def insert_csv(no,data,csv_path,message):
 
-    checking_result = check_duplicated_plate_numbers_no(csv_path,data)
+    data_with_index = [str(no)] + data + message
+    
+    with open(csv_path, 'a', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(data_with_index)   
+    
+def create_csv(path):
 
-    if checking_result[0]:
-        data_with_index = [str(checking_result[1])] + data
-        with open(csv_path, 'a', newline='') as csvfile:
-                writer = csv.writer(csvfile)
-                writer.writerow(data_with_index)   
-      
-def create_csv(path, filename):
-
-    csv_file_path = f"{path}/{filename}.csv"
+    csv_file_path = f"{path}/result.csv"
     
     with open(csv_file_path, 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
-        writer.writerow(['No','Plate_number', 'Type','Brand','Colour'])
-        print(f"CSV file '{filename}' successful create.")
+        writer.writerow(['No','Plate_number', 'Type','Brand','Colour','Message'])
+        print(f"CSV file '{csv_file_path}' successful create.")
+        
+    return csv_file_path
             
 def text_reconise(lp_crop,reader):
     
@@ -168,16 +171,83 @@ def color_reconigse(image, model,device):
         _, predicted = torch.max(outputs, 1)
 
     return predicted.item()
+
+def insert_table_info(self,data,img_path,invalid=False,message="",vehicle_onwer=""):
     
-def run(input,t):
+    if invalid : choice = self.table_warnning 
+    else : choice = self.table_info
+    
+    row_count = choice.rowCount()
+    choice.insertRow(row_count)
+    
+    # Add image to the Photo column
+    image_path = img_path
+    pixmap = QPixmap(image_path)
+    icon = QIcon(pixmap)
+    item = QTableWidgetItem()
+    item.setIcon(icon)
+    item.setTextAlignment(Qt.AlignCenter)
+    item.setSizeHint(pixmap.size()) 
+    choice.setItem(row_count, 0, item)  
+    
+    
+    choice.setItem(row_count, 1, QTableWidgetItem(data[0]))
+    choice.setItem(row_count, 2, QTableWidgetItem(data[1]))
+    choice.setItem(row_count, 3, QTableWidgetItem(data[2]))
+    choice.setItem(row_count, 4, QTableWidgetItem(data[3]))
+    
+    if invalid:
+        choice.setItem(row_count, 5, QTableWidgetItem(message))
+        choice.setItem(row_count, 6, QTableWidgetItem(vehicle_onwer))
+                                
+def check_invalid_vehicle(result_data,path):
+    
+    #default
+    code = "notfound"
+    onwer_name = ""
+    
+    #open the database file
+    with open(path, 'r', newline='') as csvfile:
+        reader = csv.reader(csvfile)
+        for col in reader:
+            if col[2] == result_data[1]: # true in vehicle plate 
+                code = "r"
+                onwer_name = col[1]
+                #type
+                if col[3] != result_data[2]: code += "T"
+                
+                #brand
+                if col[4] != result_data[3]: code += "B"
+                
+                #color
+                if col[5] != result_data[4]: code += "C"
+                
+                break
+        
+    match code:
+        case "notfound" : return True,"This License Plate not register in the system.",onwer_name
+        
+        case "rTBC" : return True,"Invalid Vehicle Type, Brand and Colour for this License Plate.",onwer_name
+        case "rTB" : return True,"Invalid Vehicle Type, Brand and Colour for this License Plate.",onwer_name
+        case "rTC" : return True,"Invalid Vehicle Type and Colour for this License Plate.",onwer_name
+        case "rT" : return True,"Invalid Vehicle Type for this License Plate.",onwer_name
+            
+        case "rB" : return True,"Invalid Vehicle Brand for this License Plate.",onwer_name
+        case "rBC" : return True,"Invalid Vehicle Brand and Colour for this License Plate.",onwer_name
+            
+        case "rC" : return True,"Invalid Vehicle Colour for this License Plate.",onwer_name
+        
+        case "r" : return False,"No error found.",onwer_name
+        
+
+def run(self):
     
     start_time = time.time()
-    name = data_and_time()
     
-    cap = cv2.VideoCapture(input)
+    cap = cv2.VideoCapture(self.input)
 
     #open new folder
-    new_folder_path = f'save/{name}'
+    new_folder_path = f'save/{data_and_time()}'
     os.makedirs(new_folder_path)
     
     # Get the video frame width and height
@@ -186,7 +256,7 @@ def run(input,t):
 
     # Define the codec and create VideoWriter object 
     fourcc = cv2.VideoWriter_fourcc(*'XVID') 
-    out = cv2.VideoWriter(f'{new_folder_path}/{name}.avi', fourcc, 25.0, (frame_width, frame_height))
+    out = cv2.VideoWriter(f'{new_folder_path}/result_video.avi', fourcc, 25.0, (frame_width, frame_height))
     
     # Load the model
     vehicel_model = YOLO('utils/yolov8n.pt')
@@ -220,7 +290,7 @@ def run(input,t):
     colour_class = ['beige','black','blue','brown','gold','green','grey','orange','pink','purple','red','silver','tan','white','yellow']
     
     #create csv file
-    create_csv(new_folder_path,name)
+    csv_file_path = create_csv(new_folder_path)
         
     # Loop through the video frames
     while cap.isOpened():
@@ -260,9 +330,9 @@ def run(input,t):
                             #crop out the lp
                             lp_crop = vehicle_crop[int(py1):int(py2), int(px1): int(px2)]
                             
-                            result = text_reconise(lp_crop,reader)
+                            vehicle_plate = text_reconise(lp_crop,reader)
                             
-                            if result[0]:
+                            if vehicle_plate[0]:
                                 
                                 #start brand detaction
                                 v_brand  = "" 
@@ -273,30 +343,42 @@ def run(input,t):
                                     bx1,by1, bx2, by2, bscore, bclassid = detection
                                     drawbox(new_frame,int(bx1),int(bx2),int(by1),int(by2),f'{brand[int(bclassid)]}_{bscore}',(0, 255, 0), 5)
 
-                                    if bscore >= 0.8:  
+                                    if bscore >= 0.7:  
                                         v_brand = brand[int(bclassid)]
                                         
                                 color_result = colour_class[color_reconigse(new_frame,color_model,device)]
-                                    
-                                #define the csv file path
-                                csv_file_path = f"{new_folder_path}/{name}.csv"
-                                        
-                                #insert data to the csv file
-                                insert_csv([result[1],vehicles[vclass_id],v_brand,color_result],csv_file_path)
                                 
-                                t.setRowCount(5)
-                                t.setItem(0, 0, QTableWidgetItem("Alice"))
-                                t.setItem(0, 1, QTableWidgetItem("23"))
-                                t.setItem(0, 2, QTableWidgetItem("USA"))
-               
-                                #save the image with the lp name.                                        
-                                cv2.imwrite(f'{new_folder_path}/{result[1]}_{v_brand}.jpg', vehicle_crop)   
+                                result_data = [vehicle_plate[1],vehicles[vclass_id],v_brand,color_result]   
+                                    
+                                #check the vehicle plate duplicated
+                                noduplicate,no = check_duplicated_plate_numbers_no(csv_file_path,vehicle_plate[1]) #return array 0 : true/false , 1: index number
+                                
+                                insert_table_info(self,result_data,f'{new_folder_path}/{vehicle_plate[1]}.jpg')
+                                
+                                #if no duplicated 
+                                if(noduplicate):
+                                    
+                                    #check the illger vehicle and return warnning message if illger
+                                    invalid,message,vehicle_onwer = check_invalid_vehicle(result_data,"utils/database.csv")
+                                    
+                                    if invalid:
+                                        insert_table_info(self,result_data,f'{new_folder_path}/{vehicle_plate[1]}.jpg',invalid,message,vehicle_onwer)
+                                        
+                                    #insert data to the csv file
+                                    insert_csv(no,result_data,csv_file_path,message)
+                                
+                                    #save the image with the lp name.                                        
+                                    cv2.imwrite(f'{new_folder_path}/{vehicle_plate[1]}.jpg', vehicle_crop)   
+                                
+                                    
+                                QApplication.processEvents()
+                                
                                         
                                 #plot lp
-                                #drawbox(new_frame,int(vx1+px1),int(vx1+px1+(px2-px1)),int(vy1+py1),int(vy1+py1+(py2-py1)),f"{str(result[1])}_{round(result[2],2)}",(0, 0, 255), 5)
+                                #drawbox(new_frame,int(vx1+px1),int(vx1+px1+(px2-px1)),int(vy1+py1),int(vy1+py1+(py2-py1)),f"{str(vehicle_plate[1])}_{round(vehicle_plate[2],2)}",(0, 0, 255), 5)
                                 
                                 #plot car
-                                #drawbox(new_frame,int(vx1),int(vx2),int(vy1),int(vy2),f'{vehicles[vclass_id]}_{result[1]}',(255, 0, 0), 5)       
+                                #drawbox(new_frame,int(vx1),int(vx2),int(vy1),int(vy2),f'{vehicles[vclass_id]}_{vehicle_plate[1]}',(255, 0, 0), 5)       
                                                        
             out.write(new_frame)
             #if show_output(new_frame): break             
@@ -316,7 +398,7 @@ def run(input,t):
     running_time = end_time - start_time
 
     print("\tProgram running time:", running_time/60, "minutes")
-    
+        
 class result_window(QMainWindow):
     def __init__(self,input):
         super().__init__()
@@ -324,17 +406,26 @@ class result_window(QMainWindow):
         self.setWindowTitle("Result")
         self.setMinimumSize(QSize(1000, 600)) 
 
-        self.table_widget = QTableWidget()
-
-        self.table_widget.setColumnCount(3)
-        self.table_widget.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.table_widget.setHorizontalHeaderLabels(["Car Plate", "Model",'Colour'])
-
-        run(input,self.table_widget)
+        self.input = input
         
+        central_widget = QWidget()
+        layout = QVBoxLayout(central_widget)
+        self.setCentralWidget(central_widget)
+        
+        self.label_result_table = QLabel("Detact Result")
+        self.label_result_table.setAlignment(Qt.AlignCenter)
+        self.label_result_table.setStyleSheet("font-size: 24px; font-weight: bold; padding: 10px;")
+        layout.addWidget(self.label_result_table)
+        
+        self.table_info = QTableWidget()
 
-        self.table_widget.setAlternatingRowColors(True)
-        self.table_widget.setStyleSheet("""
+        self.table_info.setColumnCount(5)
+        self.table_info.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table_info.setHorizontalHeaderLabels(['Vehicle_Image',"License_Plate","Vehicle_Type", "Vehicle_Brand",'Vehicle_Colour'])
+
+        self.table_info.setAlternatingRowColors(True)
+        
+        self.table_info.setStyleSheet("""
             QTableWidget::item:!alternate {
                 background-color: #f2f2f2; /* Light gray for odd rows */
             }
@@ -342,11 +433,32 @@ class result_window(QMainWindow):
                 background-color: white; /* White for even rows */
             }
         """)
+        
+        layout.addWidget(self.table_info)
+        
+        self.label_table_warnning = QLabel("Warning")
+        self.label_table_warnning.setAlignment(Qt.AlignCenter)
+        self.label_table_warnning.setStyleSheet("font-size: 24px; font-weight: bold; padding: 10px;")
+        layout.addWidget(self.label_table_warnning)
+        
+        
+        self.table_warnning = QTableWidget()
+        self.table_warnning.setColumnCount(5)
+        self.table_warnning.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table_warnning.setHorizontalHeaderLabels(['Vehicle_Image',"License_Plate","Vehicle_Type", "Vehicle_Brand",'Vehicle_Colour','Warning Message','Vehicle_Onwner'])
+        self.table_warnning.setAlternatingRowColors(True)
+        self.table_warnning.setStyleSheet("""
+            QTableWidget::item:!alternate {
+                background-color: #f2f2f2; /* Light gray for odd rows */
+            }
+            QTableWidget::item:alternate {
+                background-color: white; /* White for even rows */
+            }
+        """)
+        
+        layout.addWidget(self.table_warnning)
 
-        # Set the layout
-        layout = QVBoxLayout()
-        layout.addWidget(self.table_widget)
-
-        container = QWidget()
-        container.setLayout(layout)
-        self.setCentralWidget(container)
+        
+    def showEvent(self, event):
+        super().showEvent(event)
+        QTimer.singleShot(0, lambda:run(self))
