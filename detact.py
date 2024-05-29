@@ -8,52 +8,36 @@ import torch
 import torch.nn as nn
 import torchvision.transforms as transforms
 import torchvision.models as models
-import threading
+import numpy as np
 from datetime import datetime
 from ultralytics import YOLO
 from PIL import Image
-from PySide6.QtCore import QSize, Qt
+
+
 from PySide6.QtWidgets import (
     QApplication,
-    QHBoxLayout,
-    QLabel,
-    QMainWindow,
-    QPushButton,
-    QStackedLayout,
-    QVBoxLayout,
-    QWidget,
-    QGridLayout,
-    QColorDialog,
-    QGroupBox,
-    QStackedWidget,
-    QFileDialog,
-    QTableWidget,
     QTableWidgetItem,
-    QAbstractItemView,
-    QHeaderView
+
 )
-from PySide6.QtGui import QPixmap, QIcon
-from PySide6.QtCore import Qt, QTimer, QThread, Signal, Slot
+from PySide6.QtGui import QPixmap, QIcon,QImage
+from PySide6.QtCore import Qt,QThread,QObject,QRunnable
 
-
-def show_output(frame):
-    
-    # Naming a window 
-    cv2.namedWindow("Car_Plate_Detection", cv2.WINDOW_NORMAL) 
+def display_imag(img,result_page):
         
-    # Using resizeWindow() 
-    cv2.resizeWindow("Car_Plate_Detection", 1500, 1000)
-    
-    #window posistion
-    cv2.moveWindow("Car_Plate_Detection", 100, 50) 
-    
-    #show image 
-    cv2.imshow("Car_Plate_Detection", frame)
-        
+    # Convert OpenCV image (BGR format) to QImage
+    height, width, channels = img.shape
+    bytes_per_line = channels * width
+    q_image = QImage(img.data, width, height, bytes_per_line, QImage.Format_BGR888)
 
-    # Break the loop if 'q' is pressed
-    if cv2.waitKey(1) & 0xFF == ord("q"):
-        return True   
+    # Convert QImage to QPixmap
+    pixmap = QPixmap.fromImage(q_image)
+      
+    result_page.label_img.setPixmap(pixmap)
+    result_page.label_img.setFixedSize(pixmap.size())
+    result_page.adjustSize()
+    
+    QApplication.processEvents() 
+    
 
 def drawbox(img,x1,x2,y1,y2,label_text,color = (255, 0, 0),thickness = 5):
     
@@ -112,10 +96,30 @@ def create_csv(path):
         
     return csv_file_path
             
-def text_reconise(lp_crop,reader):
+def text_reconise(img,reader):
     
+    # Convert the image to grayscale for histogram equalization
+    gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    # Apply histogram equalization
+    equalized_gray = cv2.equalizeHist(gray_image)
+
+    # Convert the equalized grayscale image back to BGR
+    equalized_image = cv2.cvtColor(equalized_gray, cv2.COLOR_GRAY2BGR)
+
+    # Create a sharpening kernel
+    kernel = np.array([[0, -1, 0], 
+                    [-1, 5,-1], 
+                    [0, -1, 0]])
+
+    # Apply the kernel to the equalized image
+    sharpened_image = cv2.filter2D(equalized_image, -1, kernel)
+
+    # Apply denoising to the sharpened image
+    denoised_image = cv2.fastNlMeansDenoisingColored(sharpened_image, None, 10, 10, 7, 21) 
+                        
     #run the text prediction to get the text                         
-    text_result = reader.readtext(lp_crop)
+    text_result = reader.readtext(denoised_image)
      
     #if non of the result showing out    
     if text_result:
@@ -134,7 +138,7 @@ def text_reconise(lp_crop,reader):
         avg_lp_score = total_score/len(text_result)
                
                                 
-        #continue when the lp reconigse having more that equal to 80%    
+        #continue when the lp reconigse having more that equal to 70%    
         if avg_lp_score >= 0.8:   
             
             #lp pattern set : start from letter and must contain two character and at least one number and not contain any symbol   
@@ -181,16 +185,23 @@ def insert_table_info(table,data,image_path,invalid=False,message="",vehicle_onw
     row_count = choice.rowCount()
     choice.insertRow(row_count)
     
-    # Add image to the Photo column
-    pixmap = QPixmap(image_path)
-    icon = QIcon(pixmap)
+    #insert image
     item = QTableWidgetItem()
+    pixmap = QPixmap(image_path).scaled(100, 100)  # Resize the image
+    icon = QIcon(pixmap)
     item.setIcon(icon)
-    item.setTextAlignment(Qt.AlignCenter)
-    item.setSizeHint(pixmap.size()) 
-    
-    choice.setItem(row_count, 0, item)  
-    
+
+    choice.setIconSize(pixmap.size())
+
+    # Set a fixed size hint for the item to ensure it is displayed properly
+    item.setSizeHint(pixmap.size())
+        
+    choice.setItem(row_count, 0, item)
+        
+    # Optionally set row height and column width to ensure the image fits
+    choice.setRowHeight(row_count, 110)
+    choice.setColumnWidth(0, 110)
+         
     
     choice.setItem(row_count, 1, QTableWidgetItem(data[0]))
     choice.setItem(row_count, 2, QTableWidgetItem(data[1]))
@@ -240,13 +251,14 @@ def check_invalid_vehicle(result_data,path):
         
         case "r" : return False,"No error found.",onwer_name
   
-class Detaction:
+class Detaction():
 
     def __init__(load):
-    # Load the model
+        super().__init__()
+        # Load the model
         load.vehicel_model = YOLO('utils/yolov8n.pt')
         load.plate_detection = YOLO('utils/car_plate_v2.pt')
-        load.brand_detection = YOLO('utils/brand.pt')
+        load.brand_detection = YOLO('utils/brand_v2.pt')
     
         # Load the model for color recorigse
         color_model = models.googlenet(pretrained=False, aux_logits=True)  # Set aux_logits to True to match the saved model
@@ -269,10 +281,14 @@ class Detaction:
         load.vehicles = {2:"car",5:'bus', 7:'truck'} # 2: 'car' ,3: 'motorcycle', 5: 'bus', 7: 'truck'
 
         #brand define
-        load.brand= ['Audi', 'Chrysler', 'Citroen', 'GMC', 'Honda', 'Hyundai', 'Infiniti', 'Mazda', 'Mercedes', 'Mercury', 'Mitsubishi', 'Nissan', 'Renault', 'Toyota', 'Volkswagen', 'acura', 'bmw', 'cadillac', 'chevrolet', 'dodge', 'ford', 'jeep', 'kia', 'lexus', 'lincoln', 'mini', 'porsche', 'ram', 'range rover', 'skoda', 'subaru', 'suzuki', 'volvo']
+        load.brand= ['Audi', 'Chrysler', 'Citroen', 'GMC', 'Honda', 'Hyundai', 'Infiniti', 'Mazda', 'Mercedes', 'Mercury', 'Mitsubishi', 'Nissan', 'Renault', 'Toyota', 'Volkswagen', 'acura', 'bmw', 'cadillac', 'chevrolet', 'dodge', 'ford', 'jeep', 'kia', 'lexus', 'lincoln', 'mini', 'porsche', 'ram', 'range rover', 'skoda', 'subaru', 'suzuki', 'volvo','Proton','Perodua']
         
         #colour classes
         load.colour_class = ['beige','black','blue','brown','gold','green','grey','orange','pink','purple','red','silver','tan','white','yellow']
+        
+        load.total_vehicle = 0  
+        
+        load.total_warnning = 0
         
     def open_folder_csv(load):
         #open new folder
@@ -286,7 +302,7 @@ class Detaction:
         
         #copy a new frame for plotting 
         new_frame = load.frame.copy()
-                
+            
         # using YOLOV8 to detact the vehicle and the License plate
         vehicle_detaction_results = load.vehicel_model(load.frame)[0]
             
@@ -298,7 +314,25 @@ class Detaction:
                     
                 #crop out the vehicle frame    
                 vehicle_crop = load.frame[int(vy1):int(vy2), int(vx1): int(vx2), :]
-                    
+                
+                # Convert to YUV color space
+                yuv_img = cv2.cvtColor(vehicle_crop, cv2.COLOR_BGR2YUV)
+
+                # Apply histogram equalization on the Y channel
+                yuv_img[:, :, 0] = cv2.equalizeHist(yuv_img[:, :, 0])
+
+                # Convert back to BGR color space
+                equalized_img = cv2.cvtColor(yuv_img, cv2.COLOR_YUV2BGR)
+
+                # Sharpening the image using a kernel
+                #kernel = np.array([[0, -1, 0], [-1, 5,-1], [0, -1, 0]])
+                #sharpened_img = cv2.filter2D(equalized_img, -1, kernel)
+
+                # Denoising the image
+                #denoised_img = cv2.fastNlMeansDenoisingColored(sharpened_img, None, 10, 10, 7, 21)
+
+                vehicle_crop = equalized_img
+                
                 #predict the vehicle plate area    
                 car_plate_results = load.plate_detection(vehicle_crop)[0]                   
                 for detection in car_plate_results.boxes.data.tolist():
@@ -306,14 +340,14 @@ class Detaction:
                           
                     #run if the acuraccy predict is more that equal to % 
                     if pscore >= 0.8:
-                            
                         #crop out the lp
                         lp_crop = vehicle_crop[int(py1):int(py2), int(px1): int(px2)]
-                            
+                           
+                        #call the function to read the plate number
                         vehicle_plate = text_reconise(lp_crop,load.reader)
                             
                         if vehicle_plate[0]:
-                                
+                              
                             #start brand detaction
                             v_brand  = "" 
                                 
@@ -321,10 +355,13 @@ class Detaction:
 
                             for detection in brand_detaction_results.boxes.data.tolist():
                                 bx1,by1, bx2, by2, bscore, bclassid = detection
+                            
+                                drawbox(new_frame,int(vx1+bx1),int(vx1+bx1+(bx2-bx1)),int(vy1+by1),int(vy1+by1+(by2-by1)),f'{load.brand[int(bclassid)]}_{round(bscore,2)}',(0, 0, 255), 5)
 
-                                if bscore >= 0.7:  
-                                    v_brand = load.brand[int(bclassid)]
-                                        
+                                #if bscore >= 0.7:  
+                                v_brand = load.brand[int(bclassid)]
+                            
+                            #detact vehicle colour           
                             color_result = load.colour_class[color_reconigse(vehicle_crop,load.color_model,load.device)]
                                 
                             result_data = [vehicle_plate[1],load.vehicles[vclass_id],v_brand,color_result]   
@@ -336,20 +373,20 @@ class Detaction:
                                 
                             #if no duplicated 
                             if noduplicate:
+                                load.total_vehicle += 1 
+                                #save the image with the lp name.                                        
+                                cv2.imwrite(f'{load.new_folder_path}/{vehicle_plate[1]}.jpg', vehicle_crop)  
                                     
                                 #check the illger vehicle and return warnning message if illger
                                 invalid,message,vehicle_onwer = check_invalid_vehicle(result_data,"utils/database.csv")
                                     
                                 if invalid:
                                     insert_table_info(table,result_data,f'{load.new_folder_path}/{vehicle_plate[1]}.jpg',invalid,message,vehicle_onwer)
+                                    load.total_warnning +=1
                                     
-                                        
                                 #insert data to the csv file
                                 insert_csv(no,result_data,load.csv_file_path,message)
                                 
-                                #save the image with the lp name.                                        
-                                cv2.imwrite(f'{load.new_folder_path}/{vehicle_plate[1]}.jpg', vehicle_crop)   
-                                 
                             QApplication.processEvents() 
                                         
                             #plot lp
@@ -360,7 +397,11 @@ class Detaction:
                             
         return new_frame 
     
-    def video_detaction(load,table):
+    def video_detaction(load,result_page):
+        
+        load.total_vehicle = 0  
+        
+        load.total_warnning = 0
         
         #get the file path and csv path
         load.open_folder_csv()
@@ -368,7 +409,7 @@ class Detaction:
         start_time = time.time()
         
         #open video
-        cap = cv2.VideoCapture(table.detact_input)
+        cap = cv2.VideoCapture(result_page.detact_input)
 
         # Get the video frame width and height
         frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -386,8 +427,8 @@ class Detaction:
 
             if success:
                 
-                new_frame = load.run_detaction(table) #call the function and return the new_version_frame
-                                                        
+                new_frame = load.run_detaction(result_page) #call the function and return the new_version_frame
+                                                     
                 out.write(new_frame)# add the frame to the video.
             
             else:
@@ -403,41 +444,50 @@ class Detaction:
         # Calculate the elapsed time
         running_time = end_time - start_time
 
-        print("\tProgram running time:", running_time/60, "minutes")
-        
-        table.runing_text.setText(f"End \n Time Taken : \n{round(running_time/60 , 2)} minutes")
-        table.text_container.setStyleSheet("background-color:lightgreen;")
-        QApplication.processEvents() 
-    
-    def image_detaction(load,table):
-        
-        start_time = time.time()
-        #get the file path and csv path
-        load.open_folder_csv()
-        
-        load.frame = cv2.imread(table.detact_input)
-        load.run_detaction(table)
-
-        end_time = time.time()
-
-        # Calculate the elapsed time
-        running_time = end_time - start_time
-
+        print(f"Total {load.total_vehicle} vehicle detacted and {load.total_warnning} is detacted as illeger vehicle")
         print("\nProgram running time:", running_time/60, "minutes")
-        
-        table.runing_text.setText(f"End \n Time Taken : \n{round(running_time/60 , 2)} minutes")
-        table.text_container.setStyleSheet("background-color:lightgreen;")
+        result_page.runing_text.setText(f"Detaction End. \n Total {load.total_vehicle} vehicle detacted and {load.total_warnning} is detacted as illeger vehicle \nTime Taken : \n{round(running_time/60 , 2)} minutes")
+        result_page.text_container.setStyleSheet("background-color:lightgreen;")
         QApplication.processEvents() 
     
-    def live_detaction(load,table):
+    def image_detaction(load,result_page):
+        
+        load.total_vehicle = 0  
+        
+        load.total_warnning = 0
+        
+        start_time = time.time()
+        #get the file path and csv path
+        load.open_folder_csv()
+        
+        load.frame = cv2.imread(result_page.detact_input)
+        
+        new_frame = load.run_detaction(result_page)
+        
+        end_time = time.time()
+
+        # Calculate the elapsed time
+        running_time = end_time - start_time
+        
+        print(f"Total {load.total_vehicle} vehicle detacted and {load.total_warnning} is detacted as illeger vehicle")
+        print("\nProgram running time:", running_time/60, "minutes")
+        result_page.runing_text.setText(f"Detaction End. \n Total {load.total_vehicle} vehicle detacted and {load.total_warnning} is detacted as illeger vehicle \nTime Taken : \n{round(running_time/60 , 2)} minutes")
+        result_page.text_container.setStyleSheet("background-color:lightgreen;")
+        QApplication.processEvents() 
+    
+    def live_detaction(load,result_page):
+        
+        load.total_vehicle = 0  
+        
+        load.total_warnning = 0
+        
+        start_time = time.time()
         
         #get the file path and csv path
         load.open_folder_csv()
         
-        start_time = time.time()
-        
         #open video
-        cap = cv2.VideoCapture(table.input)
+        cap = cv2.VideoCapture(0)
 
         # Get the video frame width and height
         frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -447,22 +497,25 @@ class Detaction:
         fourcc = cv2.VideoWriter_fourcc(*'XVID') 
         out = cv2.VideoWriter(f'{load.new_folder_path}/result_video.avi', fourcc, 25.0, (frame_width, frame_height))
         
-            
-        # Loop through the video frames
-        while cap.isOpened():
-            # Read a frame from the video
-            success, load.frame = cap.read()
+        if not cap.isOpened():
+            print("Error: Could not open video stream.")
+        else:
+            while True:
+                # Capture frame-by-frame
+                ret, load.frame = cap.read()
 
-            if success:
-                
-                new_frame = load.run_detaction(table) #call the function and return the new_version_frame
-                                                        
+                if not ret:
+                    print("Failed to grab frame")
+                    break
+                       
+                new_frame = load.run_detaction(result_page) #call the function and return the new_version_frame
+                                                                            
                 out.write(new_frame)# add the frame to the video.
-            
-            else:
-                # Break the loop if the end of the video is reached
-                break
-
+                
+                # Press 'q' on the keyboard to exit the loop
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+                
         # Release the video capture object and close the display window
         cap.release()
         out.release() 
@@ -473,10 +526,9 @@ class Detaction:
         # Calculate the elapsed time
         running_time = end_time - start_time
 
-        print("\tProgram running time:", running_time/60, "minutes")
-        
-        table.runing_text.setText(f"End \n Time Taken : \n{round(running_time/60 , 2)} minutes")
-        table.text_container.setStyleSheet("background-color:lightgreen;")
+        print(f"Total {load.total_vehicle} vehicle detacted and {load.total_warnning} is detacted as illeger vehicle")
+        print("\nProgram running time:", running_time/60, "minutes")
+        result_page.runing_text.setText(f"Detaction End. \n Total {load.total_vehicle} vehicle detacted and {load.total_warnning} is detacted as illeger vehicle \nTime Taken : \n{round(running_time/60 , 2)} minutes")
+        result_page.text_container.setStyleSheet("background-color:lightgreen;")
         QApplication.processEvents() 
         
-

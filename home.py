@@ -24,7 +24,8 @@ from PySide6.QtWidgets import (
     QHeaderView
 )
 from PySide6.QtGui import QPixmap, QIcon
-from PySide6.QtCore import Qt, QTimer, QThread, Signal, Slot
+from PySide6.QtCore import Qt, QTimer, QThread, Signal, Slot,QThreadPool
+
 
 FF = 'Arial'
 
@@ -89,7 +90,7 @@ class MainWindow(QWidget):
         
         # Add stacked widget to main layout
         layout.addWidget(self.stacked_widget)
-        
+
         self.run_detaction = Detaction()
         
     def init_home(self):
@@ -165,21 +166,21 @@ class MainWindow(QWidget):
         layout.addLayout(create_btn("Camere",self.live_camera))
         layout.addLayout(create_btn("Video/Image",self.input_video_img))
         layout.addLayout(create_btn("back",self.back_to_home))
-
-        
+   
     def init_result(self):
         
         self.setWindowTitle("Result")
         
         layout = QVBoxLayout(self.result)
         
+        # section 1
         h_layout = QHBoxLayout()
         
         t_layout = QVBoxLayout()
         
         self.label_result_table = QLabel("Detact Result")
         self.label_result_table.setAlignment(Qt.AlignCenter)
-        self.label_result_table.setStyleSheet("font-size: 24px; font-weight: bold; padding: 10px;")
+        self.label_result_table.setStyleSheet("font-size: 20px; font-weight: bold; padding: 5px;")
         t_layout.addWidget(self.label_result_table)
         
         self.table_info = QTableWidget()
@@ -203,27 +204,23 @@ class MainWindow(QWidget):
         
         h_layout.addLayout(t_layout)
         
-        self.text_container = QWidget()
-        self.text_container.setStyleSheet("background-color:red;")
+        self.label_img = QLabel()
+        # Load the image and set it to the QLabel
+        pixmap = QPixmap("")
+        self.label_img.setPixmap(pixmap)
+        self.label_img.setFixedSize(pixmap.size())
+        self.adjustSize()
+
+        h_layout.addWidget(self.label_img)
         
-        f_layout = QVBoxLayout(self.text_container)
-        
-        self.runing_text = QLabel("Loading")
-        self.runing_text.setFont(QFont(FF, 20))
-        self.runing_text.setAlignment(Qt.AlignHCenter)
-        self.runing_text.setStyleSheet("font-weight: bold;text-align: center;margin: 10px 2px;color:white")
-        f_layout.addWidget(self.runing_text)
-        
-        f_layout.addLayout(create_btn("back",self.back_to_home))
-        
-        h_layout.addWidget(self.text_container)
+        #video
         
         layout.addLayout(h_layout)
         
-        
+        # section 2
         self.label_table_warnning = QLabel("Warning")
         self.label_table_warnning.setAlignment(Qt.AlignCenter)
-        self.label_table_warnning.setStyleSheet("font-size: 24px; font-weight: bold; padding: 10px;")
+        self.label_table_warnning.setStyleSheet("font-size: 20px; font-weight: bold; padding: 5px;")
         layout.addWidget(self.label_table_warnning)
         
         
@@ -247,7 +244,28 @@ class MainWindow(QWidget):
         header.resizeSection(5, 400) 
         
         layout.addWidget(self.table_warnning)
-
+        
+        # section 3 
+        hh_text = QHBoxLayout()
+        
+        self.text_container = QWidget()
+        self.text_container.setStyleSheet("background-color:red;")
+        
+        f_layout = QVBoxLayout(self.text_container)
+        
+        self.runing_text = QLabel("Loading")
+        self.runing_text.setFont(QFont(FF, 20))
+        self.runing_text.setAlignment(Qt.AlignHCenter)
+        self.runing_text.setStyleSheet("font-weight: bold;text-align: center;margin: 10px 2px;color:white")
+        
+        f_layout.addWidget(self.runing_text)
+        
+        hh_text.addWidget(self.text_container)
+        
+        hh_text.addLayout(create_btn("back",self.back_to_home))
+        
+        layout.addLayout(hh_text)     
+        
     def next_page(self):
         current_index = self.stacked_widget.currentIndex()
         next_index = (current_index + 1) % self.stacked_widget.count()
@@ -258,9 +276,12 @@ class MainWindow(QWidget):
     
     def live_camera(self):
         print("open camera")
+        self.runing_text.setText(f"Loading")
+        self.text_container.setStyleSheet("background-color:red;")
+        QApplication.processEvents() 
         
         self.next_page()
-        QTimer.singleShot(200, lambda:Detaction.live_detaction(self))
+        QTimer.singleShot(200, lambda:self.run_detaction.live_detaction(self))
              
     def input_video_img(self):
         
@@ -291,7 +312,7 @@ class MainWindow(QWidget):
                     self.detact_input = file_path
                     self.next_page()
                     
-                    QTimer.singleShot(200, lambda:self.run_detaction.video_detaction(self))
+                    QTimer.singleShot(200, lambda:self.run_detaction.video_detaction(self))          
                     
                 else:
                     print("Unsupported file format.")
