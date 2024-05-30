@@ -17,27 +17,18 @@ from PIL import Image
 from PySide6.QtWidgets import (
     QApplication,
     QTableWidgetItem,
-
+    QMessageBox
 )
 from PySide6.QtGui import QPixmap, QIcon,QImage
-from PySide6.QtCore import Qt,QThread,QObject,QRunnable
-
-def display_imag(img,result_page):
-        
-    # Convert OpenCV image (BGR format) to QImage
-    height, width, channels = img.shape
-    bytes_per_line = channels * width
-    q_image = QImage(img.data, width, height, bytes_per_line, QImage.Format_BGR888)
-
-    # Convert QImage to QPixmap
+from PySide6.QtCore import Qt,QThread,QObject,QRunnable,Slot,Signal, QMutex, QMutexLocker
+    
+def display_img(display,image):
+    height, width, channel = image.shape
+    bytes_per_line = 3 * width
+    q_image = QImage(image.data, width, height, bytes_per_line, QImage.Format_RGB888).rgbSwapped()
     pixmap = QPixmap.fromImage(q_image)
-      
-    result_page.label_img.setPixmap(pixmap)
-    result_page.label_img.setFixedSize(pixmap.size())
-    result_page.adjustSize()
     
-    QApplication.processEvents() 
-    
+    display.label_img.setPixmap(pixmap)
 
 def drawbox(img,x1,x2,y1,y2,label_text,color = (255, 0, 0),thickness = 5):
     
@@ -250,9 +241,8 @@ def check_invalid_vehicle(result_data,path):
         case "rC" : return True,"Invalid Vehicle Colour for this License Plate.",onwer_name
         
         case "r" : return False,"No error found.",onwer_name
-  
-class Detaction():
 
+class Load_Object():
     def __init__(load):
         super().__init__()
         # Load the model
@@ -286,9 +276,31 @@ class Detaction():
         #colour classes
         load.colour_class = ['beige','black','blue','brown','gold','green','grey','orange','pink','purple','red','silver','tan','white','yellow']
         
-        load.total_vehicle = 0  
+        if not os.path.exists("save"):
+            os.makedirs("save")
+            print("Folder save created.")
+
         
-        load.total_warnning = 0
+         
+class Detaction(QObject):
+    
+    warnning = Signal(str)
+    finish = Signal()
+    
+    def __init__(load,define_object,source_path):
+        super().__init__()
+
+        for attr, value in define_object.load_object.__dict__.items():
+            setattr(load, attr, value)
+        load.gui = define_object
+        load.detact_input = source_path
+        
+        load._is_running = True
+        load.mutex = QMutex()
+
+    def stop(self):
+        QMutexLocker(self.mutex)
+        self._is_running = False
         
     def open_folder_csv(load):
         #open new folder
@@ -298,17 +310,19 @@ class Detaction():
         #create csv file
         load.csv_file_path = create_csv(load.new_folder_path)
     
-    def run_detaction(load,table):
+    def run_detaction(load):
         
         #copy a new frame for plotting 
         new_frame = load.frame.copy()
+        
+        display_img(load.gui,new_frame)
             
         # using YOLOV8 to detact the vehicle and the License plate
         vehicle_detaction_results = load.vehicel_model(load.frame)[0]
             
         for vehicle_detection in vehicle_detaction_results.boxes.data.tolist():
             vx1, vy1, vx2, vy2, vscore, vclass_id = vehicle_detection
-                        
+                     
             #get the correct classes and the the predict score more that equal to 80%
             if int(vclass_id) in load.vehicles and vscore >= 0.8:
                     
@@ -323,13 +337,6 @@ class Detaction():
 
                 # Convert back to BGR color space
                 equalized_img = cv2.cvtColor(yuv_img, cv2.COLOR_YUV2BGR)
-
-                # Sharpening the image using a kernel
-                #kernel = np.array([[0, -1, 0], [-1, 5,-1], [0, -1, 0]])
-                #sharpened_img = cv2.filter2D(equalized_img, -1, kernel)
-
-                # Denoising the image
-                #denoised_img = cv2.fastNlMeansDenoisingColored(sharpened_img, None, 10, 10, 7, 21)
 
                 vehicle_crop = equalized_img
                 
@@ -355,8 +362,6 @@ class Detaction():
 
                             for detection in brand_detaction_results.boxes.data.tolist():
                                 bx1,by1, bx2, by2, bscore, bclassid = detection
-                            
-                                drawbox(new_frame,int(vx1+bx1),int(vx1+bx1+(bx2-bx1)),int(vy1+by1),int(vy1+by1+(by2-by1)),f'{load.brand[int(bclassid)]}_{round(bscore,2)}',(0, 0, 255), 5)
 
                                 #if bscore >= 0.7:  
                                 v_brand = load.brand[int(bclassid)]
@@ -369,35 +374,38 @@ class Detaction():
                             #check the vehicle plate duplicated
                             noduplicate,no = check_duplicated_plate_numbers_no(load.csv_file_path,vehicle_plate[1]) #return array 0 : true/false , 1: index number
                                 
-                            insert_table_info(table,result_data,f'{load.new_folder_path}/{vehicle_plate[1]}.jpg')
                                 
                             #if no duplicated 
                             if noduplicate:
                                 load.total_vehicle += 1 
+                                
                                 #save the image with the lp name.                                        
                                 cv2.imwrite(f'{load.new_folder_path}/{vehicle_plate[1]}.jpg', vehicle_crop)  
+                                
+                                insert_table_info(load.gui,result_data,f'{load.new_folder_path}/{vehicle_plate[1]}.jpg')
                                     
                                 #check the illger vehicle and return warnning message if illger
                                 invalid,message,vehicle_onwer = check_invalid_vehicle(result_data,"utils/database.csv")
                                     
                                 if invalid:
-                                    insert_table_info(table,result_data,f'{load.new_folder_path}/{vehicle_plate[1]}.jpg',invalid,message,vehicle_onwer)
+                                    insert_table_info(load.gui,result_data,f'{load.new_folder_path}/{vehicle_plate[1]}.jpg',invalid,message,vehicle_onwer)
                                     load.total_warnning +=1
                                     
                                 #insert data to the csv file
                                 insert_csv(no,result_data,load.csv_file_path,message)
                                 
-                            QApplication.processEvents() 
+                                QApplication.processEvents() 
                                         
-                            #plot lp
-                            #drawbox(new_frame,int(vx1+px1),int(vx1+px1+(px2-px1)),int(vy1+py1),int(vy1+py1+(py2-py1)),f"{str(vehicle_plate[1])}_{round(vehicle_plate[2],2)}",(0, 0, 255), 5)
+                                #plot lp
+                                #drawbox(new_frame,int(vx1+px1),int(vx1+px1+(px2-px1)),int(vy1+py1),int(vy1+py1+(py2-py1)),f"{str(vehicle_plate[1])}_{round(vehicle_plate[2],2)}",(0, 0, 255), 5)
                                 
-                            #plot car
-                            #drawbox(new_frame,int(vx1),int(vx2),int(vy1),int(vy2),f'{vehicles[vclass_id]}_{vehicle_plate[1]}',(255, 0, 0), 5)      
-                            
+                                drawbox(new_frame,int(vx1),int(vx2),int(vy1),int(vy2),f'{vehicle_plate[1]}_{load.vehicles[vclass_id]}_{v_brand}{color_result}',(255, 0, 0), 5)      
+            
+        load.gui.runing_text.setText(f"Loading. \n Total {load.total_vehicle} vehicle detacted and \n{load.total_warnning} is detacted as illeger vehicle.")    
         return new_frame 
     
-    def video_detaction(load,result_page):
+    @Slot()
+    def video_detaction(load):
         
         load.total_vehicle = 0  
         
@@ -409,7 +417,7 @@ class Detaction():
         start_time = time.time()
         
         #open video
-        cap = cv2.VideoCapture(result_page.detact_input)
+        cap = cv2.VideoCapture(load.detact_input)
 
         # Get the video frame width and height
         frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -418,39 +426,47 @@ class Detaction():
         # Define the codec and create VideoWriter object 
         fourcc = cv2.VideoWriter_fourcc(*'XVID') 
         out = cv2.VideoWriter(f'{load.new_folder_path}/result_video.avi', fourcc, 25.0, (frame_width, frame_height))
-        
             
         # Loop through the video frames
         while cap.isOpened():
+            
+            QMutexLocker(load.mutex)  # Ensure thread-safe access to _is_running
+            if not load._is_running:
+                print("Worker stopped.")
+                break
+            
             # Read a frame from the video
             success, load.frame = cap.read()
 
             if success:
                 
-                new_frame = load.run_detaction(result_page) #call the function and return the new_version_frame
+                new_frame = load.run_detaction() #call the function and return the new_version_frame
                                                      
                 out.write(new_frame)# add the frame to the video.
-            
+                
             else:
                 # Break the loop if the end of the video is reached
                 break
-
+        
         # Release the video capture object and close the display window
         cap.release()
         out.release() 
         
-        end_time = time.time()
-
+        
         # Calculate the elapsed time
-        running_time = end_time - start_time
+        running_time =time.time()- start_time
 
         print(f"Total {load.total_vehicle} vehicle detacted and {load.total_warnning} is detacted as illeger vehicle")
         print("\nProgram running time:", running_time/60, "minutes")
-        result_page.runing_text.setText(f"Detaction End. \n Total {load.total_vehicle} vehicle detacted and {load.total_warnning} is detacted as illeger vehicle \nTime Taken : \n{round(running_time/60 , 2)} minutes")
-        result_page.text_container.setStyleSheet("background-color:lightgreen;")
-        QApplication.processEvents() 
-    
-    def image_detaction(load,result_page):
+        
+        load.gui.runing_text.setText(f"Detaction End. \n Total {load.total_vehicle} vehicle detacted and \n{load.total_warnning} is detacted as illeger vehicle \nTime Taken : {round(running_time/60 , 2)} minutes")
+        load.gui.text_container.setStyleSheet("background-color:lightgreen;")
+        load.gui.result_home_btn.setEnabled(True)
+        load.gui.stop_running_btn.setEnabled(False)
+        load.finish.emit()
+
+    @Slot()
+    def image_detaction(load):
         
         load.total_vehicle = 0  
         
@@ -460,9 +476,9 @@ class Detaction():
         #get the file path and csv path
         load.open_folder_csv()
         
-        load.frame = cv2.imread(result_page.detact_input)
+        load.frame = cv2.imread(load.detact_input)
         
-        new_frame = load.run_detaction(result_page)
+        load.run_detaction()
         
         end_time = time.time()
 
@@ -471,36 +487,48 @@ class Detaction():
         
         print(f"Total {load.total_vehicle} vehicle detacted and {load.total_warnning} is detacted as illeger vehicle")
         print("\nProgram running time:", running_time/60, "minutes")
-        result_page.runing_text.setText(f"Detaction End. \n Total {load.total_vehicle} vehicle detacted and {load.total_warnning} is detacted as illeger vehicle \nTime Taken : \n{round(running_time/60 , 2)} minutes")
-        result_page.text_container.setStyleSheet("background-color:lightgreen;")
-        QApplication.processEvents() 
+        
+        load.gui.runing_text.setText(f"Detaction End. \n Total {load.total_vehicle} vehicle detacted and \n{load.total_warnning} is detacted as illeger vehicle \nTime Taken : {round(running_time/60 , 2)} minutes")
+        load.gui.text_container.setStyleSheet("background-color:lightgreen;")
+        load.gui.result_home_btn.setEnabled(True)
+        load.gui.stop_running_btn.setEnabled(False)
+        load.finish.emit()
     
-    def live_detaction(load,result_page):
-        
-        load.total_vehicle = 0  
-        
-        load.total_warnning = 0
-        
-        start_time = time.time()
-        
-        #get the file path and csv path
-        load.open_folder_csv()
+    @Slot()
+    def live_detaction(load):
         
         #open video
         cap = cv2.VideoCapture(0)
 
-        # Get the video frame width and height
-        frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-        # Define the codec and create VideoWriter object 
-        fourcc = cv2.VideoWriter_fourcc(*'XVID') 
-        out = cv2.VideoWriter(f'{load.new_folder_path}/result_video.avi', fourcc, 25.0, (frame_width, frame_height))
-        
         if not cap.isOpened():
             print("Error: Could not open video stream.")
+            load.warnning.emit("Unable to open the camera")
+            
         else:
+            load.total_vehicle = 0  
+        
+            load.total_warnning = 0
+            
+            start_time = time.time()
+            
+            #get the file path and csv path
+            load.open_folder_csv()
+            
+            
+            # Get the video frame width and height
+            frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+            # Define the codec and create VideoWriter object 
+            fourcc = cv2.VideoWriter_fourcc(*'XVID') 
+            out = cv2.VideoWriter(f'{load.new_folder_path}/result_video.avi', fourcc, 25.0, (frame_width, frame_height))
+        
             while True:
+                QMutexLocker(load.mutex)  # Ensure thread-safe access to _is_running
+                if not load._is_running:
+                    print("Worker stopped.")
+                    break
+            
                 # Capture frame-by-frame
                 ret, load.frame = cap.read()
 
@@ -508,7 +536,7 @@ class Detaction():
                     print("Failed to grab frame")
                     break
                        
-                new_frame = load.run_detaction(result_page) #call the function and return the new_version_frame
+                new_frame = load.run_detaction() #call the function and return the new_version_frame
                                                                             
                 out.write(new_frame)# add the frame to the video.
                 
@@ -516,19 +544,21 @@ class Detaction():
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
                 
-        # Release the video capture object and close the display window
-        cap.release()
-        out.release() 
-        
-        
-        end_time = time.time()
+            # Release the video capture object and close the display window
+            cap.release()
+            out.release() 
+            
+            end_time = time.time()
 
-        # Calculate the elapsed time
-        running_time = end_time - start_time
+            # Calculate the elapsed time
+            running_time = end_time - start_time
 
-        print(f"Total {load.total_vehicle} vehicle detacted and {load.total_warnning} is detacted as illeger vehicle")
-        print("\nProgram running time:", running_time/60, "minutes")
-        result_page.runing_text.setText(f"Detaction End. \n Total {load.total_vehicle} vehicle detacted and {load.total_warnning} is detacted as illeger vehicle \nTime Taken : \n{round(running_time/60 , 2)} minutes")
-        result_page.text_container.setStyleSheet("background-color:lightgreen;")
-        QApplication.processEvents() 
+            print(f"Total {load.total_vehicle} vehicle detacted and {load.total_warnning} is detacted as illeger vehicle")
+            print("\nProgram running time:", running_time/60, "minutes")
+            
+            load.gui.runing_text.setText(f"Detaction End. \n Total {load.total_vehicle} vehicle detacted and \n{load.total_warnning} is detacted as illeger vehicle \nTime Taken : {round(running_time/60 , 2)} minutes")
+            load.gui.text_container.setStyleSheet("background-color:lightgreen;")
+            load.gui.result_home_btn.setEnabled(True)
+            load.gui.stop_running_btn.setEnabled(False)
+            load.finish.emit()
         

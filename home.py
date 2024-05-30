@@ -1,30 +1,23 @@
 import sys
-import threading
-from random import choice
-from detact import Detaction
-from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QPalette, QColor,QFont
+from detact import Detaction,Load_Object
+from PySide6.QtCore import QSize, Qt,Slot
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QApplication,
     QHBoxLayout,
     QLabel,
-    QMainWindow,
     QPushButton,
-    QStackedLayout,
     QVBoxLayout,
     QWidget,
-    QGridLayout,
-    QColorDialog,
-    QGroupBox,
     QStackedWidget,
     QFileDialog,
     QTableWidget,
-    QTableWidgetItem,
     QAbstractItemView,
-    QHeaderView
+    QHeaderView,
+    QMessageBox
 )
-from PySide6.QtGui import QPixmap, QIcon
-from PySide6.QtCore import Qt, QTimer, QThread, Signal, Slot,QThreadPool
+
+from PySide6.QtCore import Qt, QThread
 
 
 FF = 'Arial'
@@ -84,27 +77,26 @@ class MainWindow(QWidget):
         self.stacked_widget.addWidget(self.input)
         self.stacked_widget.addWidget(self.result)
         
-        
         # Create layout for main window
-        layout = QVBoxLayout(self)
+        self.main_layout = QVBoxLayout(self)
         
         # Add stacked widget to main layout
-        layout.addWidget(self.stacked_widget)
-
-        self.run_detaction = Detaction()
+        self.main_layout.addWidget(self.stacked_widget)
+        
+        self.load_object = Load_Object()
         
     def init_home(self):
         layout = QVBoxLayout(self.home)
         
         #title 
-        title = QLabel("Illegal-Vehicle-Smart-Surveillance-System")
-        title.setFont(QFont(FF, 20))
-        title.setAlignment(Qt.AlignHCenter)
-        title.setFixedSize(1000, 100)
+        self.title = QLabel("Illegal-Vehicle-Smart-Surveillance-System")
+        self.title.setFont(QFont(FF, 20))
+        self.title.setAlignment(Qt.AlignHCenter)
+        self.title.setFixedSize(1000, 100)
         
         title_box = QVBoxLayout()
-        title_box.addWidget(title)
-        #title_box.setAlignment(Qt.AlignHCenter)
+        title_box.addWidget(self.title)
+        title_box.setAlignment(Qt.AlignHCenter)
         
         layout.addLayout(title_box)
         
@@ -159,7 +151,7 @@ class MainWindow(QWidget):
         
         title_box = QVBoxLayout()
         title_box.addWidget(title)
-        
+        title_box.setAlignment(Qt.AlignHCenter)
         layout.addLayout(title_box)
         
         
@@ -171,7 +163,7 @@ class MainWindow(QWidget):
         
         self.setWindowTitle("Result")
         
-        layout = QVBoxLayout(self.result)
+        self.layout_result = QVBoxLayout(self.result)
         
         # section 1
         h_layout = QHBoxLayout()
@@ -204,24 +196,19 @@ class MainWindow(QWidget):
         
         h_layout.addLayout(t_layout)
         
-        self.label_img = QLabel()
-        # Load the image and set it to the QLabel
-        pixmap = QPixmap("")
-        self.label_img.setPixmap(pixmap)
-        self.label_img.setFixedSize(pixmap.size())
-        self.adjustSize()
+        #image
+        self.label_img = QLabel(self)
 
         h_layout.addWidget(self.label_img)
         
-        #video
         
-        layout.addLayout(h_layout)
+        self.layout_result.addLayout(h_layout)
         
         # section 2
         self.label_table_warnning = QLabel("Warning")
         self.label_table_warnning.setAlignment(Qt.AlignCenter)
         self.label_table_warnning.setStyleSheet("font-size: 20px; font-weight: bold; padding: 5px;")
-        layout.addWidget(self.label_table_warnning)
+        self.layout_result.addWidget(self.label_table_warnning)
         
         
         self.table_warnning = QTableWidget()
@@ -243,7 +230,7 @@ class MainWindow(QWidget):
         header.setSectionResizeMode(QHeaderView.Fixed)
         header.resizeSection(5, 400) 
         
-        layout.addWidget(self.table_warnning)
+        self.layout_result.addWidget(self.table_warnning)
         
         # section 3 
         hh_text = QHBoxLayout()
@@ -256,21 +243,86 @@ class MainWindow(QWidget):
         self.runing_text = QLabel("Loading")
         self.runing_text.setFont(QFont(FF, 20))
         self.runing_text.setAlignment(Qt.AlignHCenter)
-        self.runing_text.setStyleSheet("font-weight: bold;text-align: center;margin: 10px 2px;color:white")
+        self.runing_text.setStyleSheet("text-align: center;margin: 10px 2px;color:white")
         
         f_layout.addWidget(self.runing_text)
         
         hh_text.addWidget(self.text_container)
         
-        hh_text.addLayout(create_btn("back",self.back_to_home))
+        #for btn
+        btn_layout = QVBoxLayout()
         
-        layout.addLayout(hh_text)     
+        #btn for stop the programe
+        self.stop_running_btn = QPushButton("Stop")
+        self.stop_running_btn.clicked.connect(self.stop_task)
+        self.stop_running_btn.setFont(QFont(FF, 12))
+        self.stop_running_btn.setFixedSize(150, 50)
+            
+        button_style = """
+                QPushButton {
+                    background-color: red;
+                    color: white;
+                    border: 2px solid white;
+                    border-radius: 20px;
+                }
+                QPushButton:hover {
+                    background-color: darkred;
+                    border-color: white;
+                    font-weight: bold;
+                }
+            """
+        self.stop_running_btn.setStyleSheet(button_style)
+        button_box = QVBoxLayout()
+        button_box.addWidget(self.stop_running_btn )
+        button_box.setAlignment(Qt.AlignHCenter)
+        btn_layout.addWidget(self.stop_running_btn )
+        
+        #btn for back to home page
+        self.result_home_btn = QPushButton("Home")
+        self.result_home_btn.clicked.connect(self.back_to_home)
+        self.result_home_btn.setFont(QFont(FF, 12))
+        self.result_home_btn.setFixedSize(150, 50)
+        self.result_home_btn.setEnabled(False)     
+        button_style = """
+                QPushButton {
+                    background-color: lightgreen;
+                    color: white;
+                    border: 2px solid white;
+                    border-radius: 20px;
+                }
+                QPushButton:hover {
+                    background-color: green;
+                    border-color: white;
+                    font-weight: bold;
+                }
+            """
+        self.result_home_btn .setStyleSheet(button_style)
+        btn_layout.addWidget(self.result_home_btn )
+        hh_text.addLayout(btn_layout)
+        
+        self.layout_result.addLayout(hh_text)     
         
     def next_page(self):
         current_index = self.stacked_widget.currentIndex()
         next_index = (current_index + 1) % self.stacked_widget.count()
         self.stacked_widget.setCurrentIndex(next_index)  
-        
+    
+    def resizeEvent(self, event):
+        # Override resizeEvent to adjust layout and image size based on window size
+        super().resizeEvent(event)
+
+        # Calculate available width for the image label
+        layout_margins = self.main_layout.contentsMargins()
+        available_width = self.width() - layout_margins.left() - layout_margins.right()
+        vailable_height = self.height() - layout_margins.top() - layout_margins.bottom()
+
+
+        #set for the result_page image
+        self.label_img.setFixedSize(int(available_width*0.5),int(vailable_height*0.4))
+
+        # Ensure image scales to fit the label
+        self.label_img.setScaledContents(True)
+         
     def back_to_home(self):
         self.stacked_widget.setCurrentIndex(0)
     
@@ -281,8 +333,20 @@ class MainWindow(QWidget):
         QApplication.processEvents() 
         
         self.next_page()
-        QTimer.singleShot(200, lambda:self.run_detaction.live_detaction(self))
-             
+        
+        self.run_detaction = Detaction(self,"")
+        self.worker_thread = QThread()
+
+        self.run_detaction.moveToThread(self.worker_thread)
+        
+        self.worker_thread.started.connect(self.run_detaction.live_detaction)                                              
+        self.worker_thread.start()
+        
+        self.run_detaction.warnning.connect(self.warnning_popout)
+        self.run_detaction.finish.connect(self.detact_finish)  
+          
+        
+           
     def input_video_img(self):
         
         self.runing_text.setText(f"Loading")
@@ -302,23 +366,67 @@ class MainWindow(QWidget):
                 # Check if selected file is an image or a video
                 if any(lower_file_path.endswith(ext) for ext in (".png", ".jpg", ".jpeg", ".bmp", ".gif")):
                     print(file_path)
-                    self.detact_input = file_path
                     self.next_page()
-                    QTimer.singleShot(200, lambda:self.run_detaction.image_detaction(self))
+                    
+                    self.run_detaction = Detaction(self,file_path)
+                    self.worker_thread = QThread()
 
+                    self.run_detaction.moveToThread(self.worker_thread)
+                    self.worker_thread.started.connect(self.run_detaction.image_detaction) 
+                    self.run_detaction.finish.connect(self.detact_finish)     
+                    self.worker_thread.start()
                     
                 elif any(lower_file_path.endswith(ext) for ext in (".mp4", ".avi", ".mov")):
                     print(file_path)
-                    self.detact_input = file_path
                     self.next_page()
                     
-                    QTimer.singleShot(200, lambda:self.run_detaction.video_detaction(self))          
-                    
+                    self.run_detaction = Detaction(self,file_path)
+                    self.worker_thread = QThread()
+
+                    self.run_detaction.moveToThread(self.worker_thread)
+                    self.worker_thread.started.connect(self.run_detaction.video_detaction)  
+                    self.run_detaction.finish.connect(self.detact_finish)  
+                    self.worker_thread.start()
                 else:
                     print("Unsupported file format.")
+                    self.warnning_popout("Unsupported file format.")
 
+    def stop_task(self):
+        self.run_detaction.stop()  # Signal the worker to stop
+        self.result_home_btn.setEnabled(True)
+        self.stop_running_btn.setEnabled(False)
     
-                
+    @Slot(str)
+    def warnning_popout(self,text):
+        dlg = QMessageBox(self)
+        dlg.setWindowTitle("Warning")
+        dlg.setText(text)
+        dlg.setStandardButtons(QMessageBox.Ok)
+        dlg.setIcon(QMessageBox.Warning)
+        button = dlg.exec()
+        
+        if button == QMessageBox.Ok:
+            self.back_to_home()
+
+        if self.worker_thread.isRunning():                   
+            self.close_thread()            
+                    
+    @Slot()
+    def detact_finish(self):
+        msg_box = QMessageBox()
+        msg_box.setIcon(QMessageBox.Information)
+        msg_box.setText("The detaction is complete")
+        msg_box.setWindowTitle("Infomation")
+        msg_box.setStandardButtons(QMessageBox.Ok)
+        msg_box.exec() 
+        
+        self.close_thread()
+        
+    def close_thread(self):
+        self.run_detaction.stop()
+        self.worker_thread.quit()
+        self.worker_thread.wait()   
+                          
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = MainWindow()
