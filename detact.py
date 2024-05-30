@@ -13,14 +13,12 @@ from datetime import datetime
 from ultralytics import YOLO
 from PIL import Image
 
-
 from PySide6.QtWidgets import (
     QApplication,
     QTableWidgetItem,
-    QMessageBox
 )
 from PySide6.QtGui import QPixmap, QIcon,QImage
-from PySide6.QtCore import Qt,QThread,QObject,QRunnable,Slot,Signal, QMutex, QMutexLocker
+from PySide6.QtCore import QObject,Slot,Signal, QMutex, QMutexLocker
     
 def display_img(display,image):
     height, width, channel = image.shape
