@@ -25,8 +25,8 @@ transform_val = transforms.Compose([
 
 if __name__ == '__main__':
     # Load your dataset
-    train_dataset = ImageFolder(root="F:/fyp_system/dataset/colour/train/", transform=transform_train)
-    val_dataset = ImageFolder(root="F:/fyp_system/dataset/colour/val/", transform=transform_val)
+    train_dataset = ImageFolder(root="F:/FYP_save/dataset/colour/train/", transform=transform_train)
+    val_dataset = ImageFolder(root="F:/FYP_save/dataset/colour/val/", transform=transform_val)
 
     train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=4)
     val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False, num_workers=4)
