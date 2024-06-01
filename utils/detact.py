@@ -244,9 +244,9 @@ class Load_Object():
     def __init__(load):
         super().__init__()
         # Load the model
-        load.vehicel_model = YOLO('model/utils/yolov8n.pt')
-        load.plate_detection = YOLO('model/utils/car_plate_v2.pt')
-        load.brand_detection = YOLO('model/utils/brand_v2.pt')
+        load.vehicel_model = YOLO('utils/model/yolov8n.pt')
+        load.plate_detection = YOLO('utils/model/car_plate_v2.pt')
+        load.brand_detection = YOLO('utils/model/brand_v2.pt')
     
         # Load the model for color recorigse
         color_model = models.googlenet(pretrained=False, aux_logits=True)  # Set aux_logits to True to match the saved model
@@ -255,7 +255,7 @@ class Load_Object():
         color_model.aux1.fc2 = nn.Linear(color_model.aux1.fc2.in_features, 15)
         color_model.aux2.fc2 = nn.Linear(color_model.aux2.fc2.in_features, 15)
 
-        model_path = "model/utils/colour.pth"
+        model_path = 'utils/model/colour.pth'
         color_model.load_state_dict(torch.load(model_path))
         load.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         color_model = color_model.to(load.device)
