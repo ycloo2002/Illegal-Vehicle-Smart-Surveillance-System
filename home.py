@@ -1,7 +1,7 @@
 import sys
-from detact import Detaction,Load_Object
-from PySide6.QtCore import QSize, Qt,Slot
-from PySide6.QtGui import QFont
+from utils.detact import Detaction,Load_Object
+from PySide6.QtCore import QSize, Qt,Slot,QThread
+from PySide6.QtGui import QFont,QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QHBoxLayout,
@@ -16,12 +16,16 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QMessageBox
 )
+#import setup_env
 
-from PySide6.QtCore import Qt, QThread
+try:
+    from ctypes import windll  # Only exists on Windows.
+    myappid = 'mycompany.myproduct.subproduct.version'
+    windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+except ImportError:
+    pass
 
-
-FF = 'Arial'
-
+FF = 'Verdana'
     
 def create_btn(name,poit_to):
         #start btn
@@ -56,7 +60,7 @@ class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
         
-        self.setWindowTitle("Home")
+        self.setWindowTitle("Illegal Vehicle Smart Surveillance")
         
         # Create stacked widget to hold pages
         self.stacked_widget = QStackedWidget(self)
@@ -89,7 +93,7 @@ class MainWindow(QWidget):
         layout = QVBoxLayout(self.home)
         
         #title 
-        self.title = QLabel("Illegal-Vehicle-Smart-Surveillance-System")
+        self.title = QLabel("Illegal Vehicle Smart Surveillance")
         self.title.setFont(QFont(FF, 20))
         self.title.setAlignment(Qt.AlignHCenter)
         self.title.setFixedSize(1000, 100)
@@ -344,9 +348,7 @@ class MainWindow(QWidget):
         
         self.run_detaction.warnning.connect(self.warnning_popout)
         self.run_detaction.finish.connect(self.detact_finish)  
-          
-        
-           
+                   
     def input_video_img(self):
         
         self.runing_text.setText(f"Loading")
@@ -428,9 +430,22 @@ class MainWindow(QWidget):
         self.worker_thread.wait()   
                           
 if __name__ == "__main__":
+    
+    #setup_env.check_and_install_packages()
+    
+    # Redirect stdout and stderr to a file
+    log_file = open('Log File.log', 'w')
+    sys.stdout = log_file
+    sys.stderr = log_file
+    
     app = QApplication(sys.argv)
+    app.setWindowIcon(QIcon('utils/img/icon.png'))
     window = MainWindow()
     window.setMinimumSize(QSize(1000, 600)) 
     window.show()
     
-    sys.exit(app.exec())
+    # Execute the application
+    exit_code = app.exec()
+
+    log_file.close()
+    sys.exit(exit_code)
