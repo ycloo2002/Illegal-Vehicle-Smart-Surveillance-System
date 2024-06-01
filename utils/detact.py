@@ -243,10 +243,20 @@ def check_invalid_vehicle(result_data,path):
 class Load_Object():
     def __init__(load):
         super().__init__()
+        utils_basedir = os.path.dirname(__file__)
+        
+        print("\nload the nessary item")
+        
         # Load the model
-        load.vehicel_model = YOLO('utils/model/yolov8n.pt')
-        load.plate_detection = YOLO('utils/model/car_plate_v2.pt')
-        load.brand_detection = YOLO('utils/model/brand_v2.pt')
+        load.vehicel_model = YOLO(f'{utils_basedir}/model/yolov8n.pt')
+        print("\nSuccessfully load vehicle model")
+        
+        load.plate_detection = YOLO(f'{utils_basedir}/model/car_plate_v2.pt')
+        print("\nSuccessfully load plate model")
+        
+        load.brand_detection = YOLO(f'{utils_basedir}/model/brand_v2.pt')
+        print("\nSuccessfully load brand model")
+        
     
         # Load the model for color recorigse
         color_model = models.googlenet(pretrained=False, aux_logits=True)  # Set aux_logits to True to match the saved model
@@ -255,35 +265,44 @@ class Load_Object():
         color_model.aux1.fc2 = nn.Linear(color_model.aux1.fc2.in_features, 15)
         color_model.aux2.fc2 = nn.Linear(color_model.aux2.fc2.in_features, 15)
 
-        model_path = 'utils/model/colour.pth'
+        model_path = f'{utils_basedir}/model/colour.pth'
         color_model.load_state_dict(torch.load(model_path))
         load.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         color_model = color_model.to(load.device)
         color_model.eval()  # Set the model to evaluation mode
         
         load.color_model = color_model
+        print("\nSuccessfully load colour model")
         
         # Initialize the OCR reader
         load.reader = easyocr.Reader(['en'], gpu=True)
         
+        print("\nSuccessfully load reader model")
+        
+        
         load.vehicles = {2:"car",5:'bus', 7:'truck'} # 2: 'car' ,3: 'motorcycle', 5: 'bus', 7: 'truck'
-
+        print("\n Successfully load vehicle : ",load.vehicles)
+        
         #brand define
         load.brand= ['Audi', 'Chrysler', 'Citroen', 'GMC', 'Honda', 'Hyundai', 'Infiniti', 'Mazda', 'Mercedes', 'Mercury', 'Mitsubishi', 'Nissan', 'Renault', 'Toyota', 'Volkswagen', 'acura', 'bmw', 'cadillac', 'chevrolet', 'dodge', 'ford', 'jeep', 'kia', 'lexus', 'lincoln', 'mini', 'porsche', 'ram', 'range rover', 'skoda', 'subaru', 'suzuki', 'volvo','Proton','Perodua']
+        print("\nSuccessfully load brand class : ",load.brand)
         
         #colour classes
         load.colour_class = ['beige','black','blue','brown','gold','green','grey','orange','pink','purple','red','silver','tan','white','yellow']
+        print("\nSuccessfully load colour class : ",load.colour_class)
+        
+        load.database_path = f'{utils_basedir}/database.csv'
+        print("\nSuccessfully load Database path : ",load.database_path)
+        
         
         if not os.path.exists("save"):
             os.makedirs("save")
             print("Folder save created.")
-
-        
-         
+    
 class Detaction(QObject):
     
     warnning = Signal(str)
-    finish = Signal()
+    finish = Signal(str)
     
     def __init__(load,define_object,source_path):
         super().__init__()
@@ -296,31 +315,45 @@ class Detaction(QObject):
         load._is_running = True
         load.mutex = QMutex()
 
-    def stop(self):
-        QMutexLocker(self.mutex)
-        self._is_running = False
+    def stop(load):
+        QMutexLocker(load.mutex)
+        load._is_running = False
         
     def open_folder_csv(load):
+        
+        load.folder_name = data_and_time()
         #open new folder
-        load.new_folder_path = f'save/{data_and_time()}'
+        load.new_folder_path = f'save/{load.folder_name}'
         os.makedirs(load.new_folder_path)
+        
+        #open folder for save the crop image
+        os.makedirs(f'{load.new_folder_path}/crop')
         
         #create csv file
         load.csv_file_path = create_csv(load.new_folder_path)
     
-    def run_detaction(load):
+    def run_detaction(load): 
         
         #copy a new frame for plotting 
         new_frame = load.frame.copy()
         
+        # Convert to YUV color space
+        yuv_img = cv2.cvtColor(load.frame, cv2.COLOR_BGR2YUV)
+
+        # Apply histogram equalization on the Y channel
+        yuv_img[:, :, 0] = cv2.equalizeHist(yuv_img[:, :, 0])
+        # Convert back to BGR color space
+        equalized_img = cv2.cvtColor(yuv_img, cv2.COLOR_YUV2BGR)
+                
         display_img(load.gui,new_frame)
-            
+         
         # using YOLOV8 to detact the vehicle and the License plate
-        vehicle_detaction_results = load.vehicel_model(load.frame)[0]
-            
-        for vehicle_detection in vehicle_detaction_results.boxes.data.tolist():
+        vehicle_detaction_results = load.vehicel_model(equalized_img)[0]
+
+        for vehicle_detection in vehicle_detaction_results.boxes.data.tolist():         
             vx1, vy1, vx2, vy2, vscore, vclass_id = vehicle_detection
-                     
+            
+            print(vscore)
             #get the correct classes and the the predict score more that equal to 80%
             if int(vclass_id) in load.vehicles and vscore >= 0.8:
                     
@@ -377,16 +410,18 @@ class Detaction(QObject):
                             if noduplicate:
                                 load.total_vehicle += 1 
                                 
+                                #save crop image path
+                                img_path = f'{load.new_folder_path}/crop/{vehicle_plate[1]}.jpg'
                                 #save the image with the lp name.                                        
-                                cv2.imwrite(f'{load.new_folder_path}/{vehicle_plate[1]}.jpg', vehicle_crop)  
+                                cv2.imwrite(img_path, vehicle_crop)  
                                 
-                                insert_table_info(load.gui,result_data,f'{load.new_folder_path}/{vehicle_plate[1]}.jpg')
+                                insert_table_info(load.gui,result_data,img_path)
                                     
                                 #check the illger vehicle and return warnning message if illger
-                                invalid,message,vehicle_onwer = check_invalid_vehicle(result_data,"utils/database.csv")
+                                invalid,message,vehicle_onwer = check_invalid_vehicle(result_data,load.database_path)
                                     
                                 if invalid:
-                                    insert_table_info(load.gui,result_data,f'{load.new_folder_path}/{vehicle_plate[1]}.jpg',invalid,message,vehicle_onwer)
+                                    insert_table_info(load.gui,result_data,img_path,invalid,message,vehicle_onwer)
                                     load.total_warnning +=1
                                     
                                 #insert data to the csv file
@@ -461,7 +496,7 @@ class Detaction(QObject):
         load.gui.text_container.setStyleSheet("background-color:lightgreen;")
         load.gui.result_home_btn.setEnabled(True)
         load.gui.stop_running_btn.setEnabled(False)
-        load.finish.emit()
+        load.finish.emit(load.folder_name)
 
     @Slot()
     def image_detaction(load):
@@ -475,6 +510,7 @@ class Detaction(QObject):
         load.open_folder_csv()
         
         load.frame = cv2.imread(load.detact_input)
+        cv2.imwrite(f'{load.new_folder_path}/original.png', load.frame)
         
         load.run_detaction()
         
@@ -490,7 +526,7 @@ class Detaction(QObject):
         load.gui.text_container.setStyleSheet("background-color:lightgreen;")
         load.gui.result_home_btn.setEnabled(True)
         load.gui.stop_running_btn.setEnabled(False)
-        load.finish.emit()
+        load.finish.emit(load.folder_name)
     
     @Slot()
     def live_detaction(load):
@@ -558,5 +594,5 @@ class Detaction(QObject):
             load.gui.text_container.setStyleSheet("background-color:lightgreen;")
             load.gui.result_home_btn.setEnabled(True)
             load.gui.stop_running_btn.setEnabled(False)
-            load.finish.emit()
+            load.finish.emit(load.folder_name)
         

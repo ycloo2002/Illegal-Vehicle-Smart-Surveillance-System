@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QMessageBox
 )
+import os
 #import setup_env
 
 try:
@@ -24,6 +25,8 @@ try:
     windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 except ImportError:
     pass
+
+basedir = os.path.dirname(__file__)
 
 FF = 'Verdana'
     
@@ -355,7 +358,7 @@ class MainWindow(QWidget):
         self.text_container.setStyleSheet("background-color:red;")
         QApplication.processEvents() 
         
-        print("video/camera")
+        print("\nvideo/camera")
         file_dialog = QFileDialog(self)
         file_dialog.setNameFilter("Video/Image (*.png *.jpg *.jpeg *.bmp *.gif *.mp4 *.avi *.mov)")
         file_dialog.setViewMode(QFileDialog.Detail)
@@ -367,12 +370,12 @@ class MainWindow(QWidget):
                 lower_file_path = file_path.lower()
                 # Check if selected file is an image or a video
                 if any(lower_file_path.endswith(ext) for ext in (".png", ".jpg", ".jpeg", ".bmp", ".gif")):
-                    print(file_path)
+                    print("Image file path",file_path)
                     self.next_page()
                     
                     self.run_detaction = Detaction(self,file_path)
                     self.worker_thread = QThread()
-
+                    
                     self.run_detaction.moveToThread(self.worker_thread)
                     self.worker_thread.started.connect(self.run_detaction.image_detaction) 
                     self.run_detaction.finish.connect(self.detact_finish)     
@@ -413,11 +416,11 @@ class MainWindow(QWidget):
         if self.worker_thread.isRunning():                   
             self.close_thread()            
                     
-    @Slot()
-    def detact_finish(self):
+    @Slot(str)
+    def detact_finish(self,folder_name):
         msg_box = QMessageBox()
         msg_box.setIcon(QMessageBox.Information)
-        msg_box.setText("The detaction is complete")
+        msg_box.setText(f"The detaction is complete. The result is save to {basedir}/{folder_name}")
         msg_box.setWindowTitle("Infomation")
         msg_box.setStandardButtons(QMessageBox.Ok)
         msg_box.exec() 
@@ -428,15 +431,31 @@ class MainWindow(QWidget):
         self.run_detaction.stop()
         self.worker_thread.quit()
         self.worker_thread.wait()   
-                          
+
+class Tee:
+    def __init__(self, *files):
+        self.files = files
+
+    def write(self, text):
+        for file in self.files:
+            file.write(text)
+            file.flush()  # Ensure output is written immediately
+
+    def flush(self):
+        for file in self.files:
+            file.flush()
+                                      
 if __name__ == "__main__":
     
     #setup_env.check_and_install_packages()
     
     # Redirect stdout and stderr to a file
     log_file = open('Log File.log', 'w')
-    sys.stdout = log_file
-    sys.stderr = log_file
+    
+    # Duplicate stdout and stderr to the console and the log file
+    original_stdout = sys.stdout
+    original_stderr = sys.stderr
+    sys.stdout = sys.stderr = Tee(sys.stdout, log_file)
     
     app = QApplication(sys.argv)
     app.setWindowIcon(QIcon('utils/img/icon.png'))
