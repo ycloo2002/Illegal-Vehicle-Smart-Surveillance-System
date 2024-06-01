@@ -2,8 +2,10 @@ import sys
 from utils.detact import Detaction,Load_Object
 from PySide6.QtCore import QSize, Qt,Slot,QThread
 from PySide6.QtGui import QFont,QIcon
+
 from PySide6.QtWidgets import (
     QApplication,
+    QMainWindow,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -14,9 +16,12 @@ from PySide6.QtWidgets import (
     QTableWidget,
     QAbstractItemView,
     QHeaderView,
-    QMessageBox
+    QMessageBox,
+    QTableWidgetItem
 )
 import os
+import csv
+
 #import setup_env
 
 try:
@@ -30,36 +35,7 @@ basedir = os.path.dirname(__file__)
 
 FF = 'Verdana'
     
-def create_btn(name,poit_to):
-        #start btn
-    button = QPushButton(name)
-    button.clicked.connect(poit_to)
-    button.setFont(QFont(FF, 12))
-    button.setFixedSize(150, 50)
-        
-    button_style = """
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                border: 2px solid #4CAF50;
-                border-radius: 20px;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-                border-color: #45a049;
-                font-weight: bold;
-            }
-        """
-        
-    button.setStyleSheet(button_style)
-        
-    button_box = QVBoxLayout()
-    button_box.addWidget(button)
-    button_box.setAlignment(Qt.AlignHCenter)
-        
-    return button_box
-     
-class MainWindow(QWidget):
+class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         
@@ -72,23 +48,21 @@ class MainWindow(QWidget):
         self.home = QWidget()
         self.input = QWidget()
         self.result = QWidget()
-        
+        self.history = QWidget()
         
         # Add widgets to pages
         self.init_home()
         self.init_input()
         self.init_result()
+        self.init_history()
         
         # Add pages to stacked widget
         self.stacked_widget.addWidget(self.home)
         self.stacked_widget.addWidget(self.input)
         self.stacked_widget.addWidget(self.result)
+        self.stacked_widget.addWidget(self.history)
         
-        # Create layout for main window
-        self.main_layout = QVBoxLayout(self)
-        
-        # Add stacked widget to main layout
-        self.main_layout.addWidget(self.stacked_widget)
+        self.setCentralWidget(self.stacked_widget)
         
         self.load_object = Load_Object()
         
@@ -150,25 +124,75 @@ class MainWindow(QWidget):
     def init_input(self):
         layout = QVBoxLayout(self.input)
 
-        #title 
+        # Create a back button
+        back_button = QPushButton("", self.input)
+        back_button.clicked.connect(self.back_to_home)
+        
+        icon = QIcon("utils\img\previous.png")  # Replace with any icon name from the list
+        back_button.setIcon(icon)
+        back_button.setIconSize(icon.actualSize(back_button.sizeHint()))
+        back_button.setStyleSheet("background-color: transparent;")
+        
+        # Create a container widget to hold the back button
+        container_layout = QVBoxLayout()
+        layout.addWidget(back_button)
+        layout.setAlignment(back_button, Qt.AlignTop | Qt.AlignLeft)
+            
+        #layout.addLayout(container_layout)
+        
+        #title
         title = QLabel("Choose Input Type")
-        title.setFont(QFont(FF, 15))
-        title.setAlignment(Qt.AlignHCenter)
-        title.setFixedSize(1000, 40)
-        
-        title_box = QVBoxLayout()
-        title_box.addWidget(title)
-        title_box.setAlignment(Qt.AlignHCenter)
-        layout.addLayout(title_box)
+        title.setFont(QFont(FF, 18))
+        title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title, alignment=Qt.AlignCenter)
         
         
-        layout.addLayout(create_btn("Camere",self.live_camera))
-        layout.addLayout(create_btn("Video/Image",self.input_video_img))
-        layout.addLayout(create_btn("back",self.back_to_home))
+        #define the button style
+        button_style = """
+                QPushButton {
+                    background-color: skyblue;
+                    color: white;
+                    border: 2px solid white;
+                    border-radius: 20px;
+                }
+                QPushButton:hover {
+                    background-color: blue;
+                    border-color: darkblue;
+                    font-weight: bold;
+                }
+            """
+            
+        button_camera = QPushButton("Camere")
+        button_camera.clicked.connect(self.live_camera)
+        button_camera.setFont(QFont(FF, 15))
+        button_camera.setFixedSize(200, 50)
+        button_camera.setStyleSheet(button_style)
+        
+        button_v_i = QPushButton("Video/Image")
+        button_v_i.clicked.connect(self.input_video_img)
+        button_v_i.setFont(QFont(FF, 15))
+        button_v_i.setFixedSize(200, 50)
+        button_v_i.setStyleSheet(button_style)
+        
+        button_history = QPushButton("History")
+        button_history.clicked.connect(self.go_to_history)
+        button_history.setFont(QFont(FF, 15))
+        button_history.setFixedSize(200, 50)
+        button_history.setStyleSheet(button_style)
+        
+        button_box = QVBoxLayout()
+        button_box.addWidget(button_camera)
+        button_box.addWidget(button_v_i)
+        button_box.addWidget(button_history)
+        button_box.setAlignment(Qt.AlignCenter)
+        
+        # Add button layout to main layout
+        layout.addStretch()
+        layout.addLayout(button_box)
+        layout.addStretch()
+        
    
     def init_result(self):
-        
-        self.setWindowTitle("Result")
         
         self.layout_result = QVBoxLayout(self.result)
         
@@ -309,17 +333,107 @@ class MainWindow(QWidget):
         
         self.layout_result.addLayout(hh_text)     
         
+    def init_history(self):
+        print("in history page")
+        self.layout_history = QVBoxLayout(self.history)
+
+        # Create a back button
+        back_button = QPushButton("", self.history)
+        back_button.clicked.connect(self.go_to_input)
+        
+        icon = QIcon("utils\img\previous.png")  # Replace with any icon name from the list
+        back_button.setIcon(icon)
+        back_button.setIconSize(icon.actualSize(back_button.sizeHint()))
+        back_button.setStyleSheet("background-color: transparent;")
+
+        # Create a container widget to hold the back button
+        container_layout = QVBoxLayout()
+        container_layout.addWidget(back_button)
+        container_layout.setAlignment(back_button, Qt.AlignTop | Qt.AlignLeft)
+            
+        self.layout_history.addLayout(container_layout)
+        
+        #start table
+        self.history_table = QLabel("History")
+        self.history_table.setAlignment(Qt.AlignCenter)
+        self.history_table.setStyleSheet("font-size: 20px; font-weight: bold; padding: 5px;")
+        self.layout_history.addWidget(self.history_table)
+        
+        self.table_history = QTableWidget()
+        self.table_history.setColumnCount(4)
+        self.table_history.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table_history.setHorizontalHeaderLabels(['Name',"Total Vehicle Detact","Total of Illeger vehicle",'Action'])
+        self.table_history.setAlternatingRowColors(True)
+        self.table_history.setStyleSheet("""
+            QTableWidget::item:!alternate {
+                background-color: #f2f2f2; /* Light gray for odd rows */
+            }
+            QTableWidget::item:alternate {
+                background-color: white; /* White for even rows */
+            }
+        """)
+
+        save_folder_path = f"{basedir}/save"
+        
+        if os.path.isdir(save_folder_path):
+            result_folder_path  = [f.path for f in os.scandir(save_folder_path) if f.is_dir()]
+            
+            if len(result_folder_path) == 0:
+                print("No history found")
+                self.table_history.insertRow(1)     
+                self.table_history.setItem(1, 0, QTableWidgetItem("No history found"))   
+                #self.table_history.setSpan(1, 1, 1, 4 - 1 + 1)
+                
+            else :  
+                
+                for folder in result_folder_path:
+                    total_detact,total_no_illeger=0
+                    folder_name = os.path.basename(folder)
+                    with open(f'{folder}/result.csv', 'r', newline='') as csvfile:
+                        reader = csv.reader(csvfile)
+                        for row in reader:
+                            total_detact += 1
+                            if row[5] == "No error found.":
+                                total_no_illeger += 1
+                                
+                    total_illeger = total_detact - total_no_illeger
+                    
+                    row_count = self.table_history.rowCount()   
+                    self.table_history.insertRow(row_count)
+                    self.table_history.setItem(row_count, 1, QTableWidgetItem(folder_name))
+                    self.table_history.setItem(row_count, 2, QTableWidgetItem(total_detact))
+                    self.table_history.setItem(row_count, 3, QTableWidgetItem(total_illeger))
+                    self.table_history.setItem(row_count, 4, QTableWidgetItem(row_count))
+        else:
+            self.table_history.insertRow(1)        
+            self.table_history.setSpan(1, 1, 1, 4 - 1 + 1)
+            self.table_history.setItem(1, 1, QTableWidgetItem("No history found"))
+   
+        self.table_history.resizeColumnsToContents()
+        self.layout_history.addWidget(self.table_history)
+        
+        QApplication.processEvents() 
+           
     def next_page(self):
         current_index = self.stacked_widget.currentIndex()
         next_index = (current_index + 1) % self.stacked_widget.count()
         self.stacked_widget.setCurrentIndex(next_index)  
-    
+            
+    def back_to_home(self):
+        self.stacked_widget.setCurrentIndex(0)
+        
+    def go_to_input(self):
+        self.stacked_widget.setCurrentIndex(1)
+        
+    def go_to_history(self):
+        self.stacked_widget.setCurrentIndex(3)
+                    
     def resizeEvent(self, event):
         # Override resizeEvent to adjust layout and image size based on window size
         super().resizeEvent(event)
 
         # Calculate available width for the image label
-        layout_margins = self.main_layout.contentsMargins()
+        layout_margins = self.contentsMargins()
         available_width = self.width() - layout_margins.left() - layout_margins.right()
         vailable_height = self.height() - layout_margins.top() - layout_margins.bottom()
 
@@ -329,9 +443,6 @@ class MainWindow(QWidget):
 
         # Ensure image scales to fit the label
         self.label_img.setScaledContents(True)
-         
-    def back_to_home(self):
-        self.stacked_widget.setCurrentIndex(0)
     
     def live_camera(self):
         print("open camera")
@@ -458,7 +569,7 @@ if __name__ == "__main__":
     sys.stdout = sys.stderr = Tee(sys.stdout, log_file)
     
     app = QApplication(sys.argv)
-    app.setWindowIcon(QIcon('utils/img/icon.png'))
+    app.setWindowIcon(QIcon(f'utils/img/icon.png'))
     window = MainWindow()
     window.setMinimumSize(QSize(1000, 600)) 
     window.show()
