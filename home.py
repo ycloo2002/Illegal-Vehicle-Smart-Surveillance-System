@@ -334,7 +334,6 @@ class MainWindow(QMainWindow):
         self.layout_result.addLayout(hh_text)     
         
     def init_history(self):
-        print("in history page")
         self.layout_history = QVBoxLayout(self.history)
 
         # Create a back button
@@ -380,19 +379,22 @@ class MainWindow(QMainWindow):
             
             if len(result_folder_path) == 0:
                 print("No history found")
-                self.table_history.insertRow(1)     
-                self.table_history.setItem(1, 0, QTableWidgetItem("No history found"))   
-                #self.table_history.setSpan(1, 1, 1, 4 - 1 + 1)
+                self.table_history.setRowCount(1)     
+                self.table_history.setItem(0, 0, QTableWidgetItem("No history found")  )
+                self.table_history.setSpan(0, 0, 1, 4 - 1 + 1)
                 
             else :  
                 
                 for folder in result_folder_path:
-                    total_detact,total_no_illeger=0
+                    total_detact=0
+                    total_no_illeger=0
                     folder_name = os.path.basename(folder)
+                    print(f'{folder}/result.csv')
                     with open(f'{folder}/result.csv', 'r', newline='') as csvfile:
                         reader = csv.reader(csvfile)
                         for row in reader:
                             total_detact += 1
+                            print(total_detact)
                             if row[5] == "No error found.":
                                 total_no_illeger += 1
                                 
@@ -400,14 +402,14 @@ class MainWindow(QMainWindow):
                     
                     row_count = self.table_history.rowCount()   
                     self.table_history.insertRow(row_count)
-                    self.table_history.setItem(row_count, 1, QTableWidgetItem(folder_name))
-                    self.table_history.setItem(row_count, 2, QTableWidgetItem(total_detact))
-                    self.table_history.setItem(row_count, 3, QTableWidgetItem(total_illeger))
-                    self.table_history.setItem(row_count, 4, QTableWidgetItem(row_count))
+                    self.table_history.setItem(row_count, 0, QTableWidgetItem(folder_name))
+                    self.table_history.setItem(row_count, 1, QTableWidgetItem(total_detact))
+                    self.table_history.setItem(row_count, 2, QTableWidgetItem(total_illeger))
+                    self.table_history.setItem(row_count, 3, QTableWidgetItem(row_count))
         else:
-            self.table_history.insertRow(1)        
-            self.table_history.setSpan(1, 1, 1, 4 - 1 + 1)
-            self.table_history.setItem(1, 1, QTableWidgetItem("No history found"))
+            self.table_history.setRowCount(1)     
+            self.table_history.setItem(0, 0, QTableWidgetItem("Invalid Path")  )
+            self.table_history.setSpan(0, 0, 1, 4 - 1 + 1)
    
         self.table_history.resizeColumnsToContents()
         self.layout_history.addWidget(self.table_history)
