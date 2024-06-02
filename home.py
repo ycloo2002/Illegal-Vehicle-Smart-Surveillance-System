@@ -1,8 +1,8 @@
 import sys
 from utils.detact import Detaction,Load_Object
 from PySide6.QtCore import QSize, Qt,Slot,QThread
-from PySide6.QtGui import QFont,QIcon
-
+from PySide6.QtGui import QFont,QIcon,QPixmap,QColor,QPainter
+from functools import partial
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -38,8 +38,26 @@ FF = 'Verdana'
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.table_setting = """
+            
+            QHeaderView::section 
+            { 
+                background-color: gray; 
+            }
+            QTableWidget::item:!alternate {
+                background-color: #f2f2f2; /* Light gray for odd rows */
+            }
+            QTableWidget::item:selected {
+                background-color: lightblue; /* Change selection color */
+                color: black; /* Ensure selected text color is black */
+            }
+            QTableWidget::item:alternate {
+                background-color: white; /* White for even rows */
+            }
+        """
         
         self.setWindowTitle("Illegal Vehicle Smart Surveillance")
+        self.setStyleSheet("background-color: #add8e6;")
         
         # Create stacked widget to hold pages
         self.stacked_widget = QStackedWidget(self)
@@ -49,29 +67,31 @@ class MainWindow(QMainWindow):
         self.input = QWidget()
         self.result = QWidget()
         self.history = QWidget()
+        self.history_details = QWidget()
         
         # Add widgets to pages
         self.init_home()
         self.init_input()
         self.init_result()
         self.init_history()
+        self.init_history_details()
         
         # Add pages to stacked widget
         self.stacked_widget.addWidget(self.home)
         self.stacked_widget.addWidget(self.input)
         self.stacked_widget.addWidget(self.result)
         self.stacked_widget.addWidget(self.history)
+        self.stacked_widget.addWidget(self.history_details)
         
         self.setCentralWidget(self.stacked_widget)
         
         self.load_object = Load_Object()
-        
+            
     def init_home(self):
         layout = QVBoxLayout(self.home)
-        
         #title 
         self.title = QLabel("Illegal Vehicle Smart Surveillance")
-        self.title.setFont(QFont(FF, 20))
+        self.title.setFont(QFont(FF, 30))
         self.title.setAlignment(Qt.AlignHCenter)
         self.title.setFixedSize(1000, 100)
         
@@ -83,21 +103,22 @@ class MainWindow(QMainWindow):
         
         #start btn
         button = QPushButton("Start")
-        button.clicked.connect(self.next_page)
+        button.clicked.connect(self.go_to_input)
         button.setFont(QFont(FF, 12))
         button.setFixedSize(150, 50)
         
         button_style = """
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                border: 2px solid #4CAF50;
-                border-radius: 20px;
-            }
             QPushButton:hover {
-                background-color: #45a049;
-                border-color: #45a049;
+                background-color: transparent;
+                color: black;
                 font-weight: bold;
+                border-color: white;
+            }
+            QPushButton {
+                background-color: #1c1cf0;
+                border: 2px solid white;
+                border-radius: 20px;
+                color: white;
             }
         """
         
@@ -189,8 +210,7 @@ class MainWindow(QMainWindow):
         # Add button layout to main layout
         layout.addStretch()
         layout.addLayout(button_box)
-        layout.addStretch()
-        
+        layout.addStretch()   
    
     def init_result(self):
         
@@ -214,14 +234,7 @@ class MainWindow(QMainWindow):
 
         self.table_info.setAlternatingRowColors(True)
         
-        self.table_info.setStyleSheet("""
-            QTableWidget::item:!alternate {
-                background-color: #f2f2f2; /* Light gray for odd rows */
-            }
-            QTableWidget::item:alternate {
-                background-color: white; /* White for even rows */
-            }
-        """)
+        self.table_info.setStyleSheet(self.table_setting)
         
         t_layout.addWidget(self.table_info)
         
@@ -247,14 +260,7 @@ class MainWindow(QMainWindow):
         self.table_warnning.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table_warnning.setHorizontalHeaderLabels(['Vehicle_Image',"License_Plate","Vehicle_Type", "Vehicle_Brand",'Vehicle_Colour','Warning Message','Vehicle_Onwner'])
         self.table_warnning.setAlternatingRowColors(True)
-        self.table_warnning.setStyleSheet("""
-            QTableWidget::item:!alternate {
-                background-color: #f2f2f2; /* Light gray for odd rows */
-            }
-            QTableWidget::item:alternate {
-                background-color: white; /* White for even rows */
-            }
-        """)
+        self.table_warnning.setStyleSheet(self.table_setting)
         
         # Set the column sizes
         header = self.table_warnning.horizontalHeader()
@@ -360,22 +366,63 @@ class MainWindow(QMainWindow):
         
         self.table_history = QTableWidget()
         self.table_history.setColumnCount(4)
-        self.table_history.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.table_history.setHorizontalHeaderLabels(['Name',"Total Vehicle Detact","Total of Illeger vehicle",'Action'])
+        #self.table_history.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table_history.setHorizontalHeaderLabels(['Name',"Total Vehicle Detact","Total of Illegel vehicle",'Action'])
         self.table_history.setAlternatingRowColors(True)
-        self.table_history.setStyleSheet("""
-            QTableWidget::item:!alternate {
-                background-color: #f2f2f2; /* Light gray for odd rows */
-            }
-            QTableWidget::item:alternate {
-                background-color: white; /* White for even rows */
-            }
-        """)
+        self.table_history.setStyleSheet(self.table_setting)
+        
+        self.layout_history.addWidget(self.table_history)
+    
+    def init_history_details(self):
+        self.layout_history_details = QVBoxLayout(self.history_details)
 
+        # Create a back button
+        back_button = QPushButton("", self.history_details)
+        back_button.clicked.connect(self.go_to_history)
+        
+        icon = QIcon("utils\img\previous.png")  # Replace with any icon name from the list
+        back_button.setIcon(icon)
+        back_button.setIconSize(icon.actualSize(back_button.sizeHint()))
+        back_button.setStyleSheet("background-color: transparent;")
+
+        # Create a container widget to hold the back button
+        container_layout = QVBoxLayout()
+        container_layout.addWidget(back_button)
+        container_layout.setAlignment(back_button, Qt.AlignTop | Qt.AlignLeft)
+            
+        self.layout_history_details.addLayout(container_layout)
+        
+        #start table
+        self.label_history_details_table = QLabel("History_details")
+        self.label_history_details_table.setAlignment(Qt.AlignCenter)
+        self.label_history_details_table.setStyleSheet("font-size: 20px; font-weight: bold; padding: 5px;")
+        self.layout_history_details.addWidget(self.label_history_details_table)
+        
+        self.history_details_table = QTableWidget()
+        self.history_details_table.setColumnCount(6)
+        self.history_details_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.history_details_table.setHorizontalHeaderLabels(['Vehicle_Image',"License_Plate","Vehicle_Type", "Vehicle_Brand",'Vehicle_Colour','Warning Message'])
+        self.history_details_table.setAlternatingRowColors(True)
+        self.history_details_table.setStyleSheet(self.table_setting)
+        
+        self.layout_history_details.addWidget(self.history_details_table)
+            
+    def back_to_home(self):
+        self.stacked_widget.setCurrentIndex(0)
+        
+    def go_to_input(self):
+        self.stacked_widget.setCurrentIndex(1)
+        
+    def go_to_history(self):
+        
+        self.table_history.clearContents()  # Clear the cell contents
+        self.table_history.setRowCount(0)
+        
         save_folder_path = f"{basedir}/save"
         
         if os.path.isdir(save_folder_path):
             result_folder_path  = [f.path for f in os.scandir(save_folder_path) if f.is_dir()]
+            result_folder_path.sort(reverse=True)
             
             if len(result_folder_path) == 0:
                 print("No history found")
@@ -386,50 +433,115 @@ class MainWindow(QMainWindow):
             else :  
                 
                 for folder in result_folder_path:
-                    total_detact=0
-                    total_no_illeger=0
+                    total_detact=-1
+                    total_no_illeger=-1
                     folder_name = os.path.basename(folder)
-                    print(f'{folder}/result.csv')
                     with open(f'{folder}/result.csv', 'r', newline='') as csvfile:
                         reader = csv.reader(csvfile)
                         for row in reader:
                             total_detact += 1
-                            print(total_detact)
                             if row[5] == "No error found.":
                                 total_no_illeger += 1
                                 
-                    total_illeger = total_detact - total_no_illeger
+                    total_illeger = total_detact - total_no_illeger -1
                     
                     row_count = self.table_history.rowCount()   
                     self.table_history.insertRow(row_count)
                     self.table_history.setItem(row_count, 0, QTableWidgetItem(folder_name))
-                    self.table_history.setItem(row_count, 1, QTableWidgetItem(total_detact))
-                    self.table_history.setItem(row_count, 2, QTableWidgetItem(total_illeger))
-                    self.table_history.setItem(row_count, 3, QTableWidgetItem(row_count))
+                    self.table_history.setItem(row_count, 1, QTableWidgetItem(str(total_detact)))
+                    self.table_history.setItem(row_count, 2, QTableWidgetItem(str(total_illeger)))
+                    
+                    if total_illeger != 0:
+                        #set button
+                        action_btn = QPushButton("More")
+                        action_btn.clicked.connect(partial(self.go_to_history_details, folder))
+                        icon = QIcon("utils\img\mi.png")  # Replace with any icon name from the list
+                        action_btn.setIcon(icon)
+                        action_btn.setIconSize(icon.actualSize(action_btn.sizeHint()))
+                        action_btn.setStyleSheet("""                                      
+                                                QPushButton:hover {
+                                                background-color: lightgray;
+                                                border-color: black;
+                                                font-weight: bold;
+                                                }
+                                                """)
+        
+                        self.table_history.setCellWidget(row_count, 3, action_btn)
         else:
             self.table_history.setRowCount(1)     
             self.table_history.setItem(0, 0, QTableWidgetItem("Invalid Path")  )
             self.table_history.setSpan(0, 0, 1, 4 - 1 + 1)
    
         self.table_history.resizeColumnsToContents()
-        self.layout_history.addWidget(self.table_history)
-        
-        QApplication.processEvents() 
-           
-    def next_page(self):
-        current_index = self.stacked_widget.currentIndex()
-        next_index = (current_index + 1) % self.stacked_widget.count()
-        self.stacked_widget.setCurrentIndex(next_index)  
-            
-    def back_to_home(self):
-        self.stacked_widget.setCurrentIndex(0)
-        
-    def go_to_input(self):
-        self.stacked_widget.setCurrentIndex(1)
-        
-    def go_to_history(self):
         self.stacked_widget.setCurrentIndex(3)
+     
+    def go_to_history_details(self,folder_path):
+        
+        self.history_details_table.clearContents()  # Clear the cell contents
+        self.history_details_table.setRowCount(0)
+ 
+        total_detact=-1
+        total_no_illeger=-1
+        with open(f'{folder_path}/result.csv', 'r', newline='') as csvfile:
+            reader = csv.reader(csvfile)
+            for col in reader:
+                if col[0] != "No":
+                    row_count = self.history_details_table.rowCount()
+                    self.history_details_table.insertRow(row_count)
                     
+                    img_path = f'{folder_path}/crop/{col[1]}.jpg'
+                    
+                    #insert image
+                    item = QTableWidgetItem()
+                    pixmap = QPixmap(img_path).scaled(100, 100)  # Resize the image
+                    icon = QIcon(pixmap)
+                    item.setIcon(icon)
+
+                    self.history_details_table.setIconSize(pixmap.size())
+
+                    # Set a fixed size hint for the item to ensure it is displayed properly
+                    item.setSizeHint(pixmap.size())
+                        
+                    self.history_details_table.setItem(row_count, 0, item)
+                        
+                    # Optionally set row height and column width to ensure the image fits
+                    self.history_details_table.setRowHeight(row_count, 110)
+                    self.history_details_table.setColumnWidth(0, 110)
+                    self.history_details_table.setItem(row_count, 1, QTableWidgetItem(col[1]))
+                    self.history_details_table.setItem(row_count, 2, QTableWidgetItem(col[2]))
+                    self.history_details_table.setItem(row_count, 3, QTableWidgetItem(col[3]))
+                    self.history_details_table.setItem(row_count, 4, QTableWidgetItem(col[4]))
+                    self.history_details_table.setItem(row_count, 5, QTableWidgetItem(col[5]))
+                    
+                    total_detact += 1
+
+                    if col[5] == "No error found.":
+                        total_no_illeger += 1
+                        
+        total_illeger = total_detact - total_no_illeger -1
+        
+        row_count = self.history_details_table.rowCount()
+        self.history_details_table.insertRow(row_count)  
+        
+        self.history_details_table.setItem(row_count, 0, QTableWidgetItem("Total No Illegel Vehicle"))
+        self.history_details_table.setItem(row_count, 5, QTableWidgetItem(str(total_no_illeger)))
+        self.history_details_table.setSpan(row_count, 0, 1, 5)
+        
+        row_count = self.history_details_table.rowCount()
+        self.history_details_table.insertRow(row_count) 
+        self.history_details_table.setItem(row_count, 0, QTableWidgetItem("Total Illegel Vehicle"))
+        self.history_details_table.setItem(row_count, 5, QTableWidgetItem(str(total_illeger)))
+        self.history_details_table.setSpan(row_count, 0, 1, 5)
+        
+        row_count = self.history_details_table.rowCount()
+        self.history_details_table.insertRow(row_count) 
+        self.history_details_table.setItem(row_count, 0, QTableWidgetItem("Total Vehicle"))
+        self.history_details_table.setItem(row_count, 5, QTableWidgetItem(str(total_detact)))
+        self.history_details_table.setSpan(row_count, 0, 1, 5)
+        
+        self.history_details_table.resizeColumnsToContents()
+        self.stacked_widget.setCurrentIndex(4)
+                                
     def resizeEvent(self, event):
         # Override resizeEvent to adjust layout and image size based on window size
         super().resizeEvent(event)

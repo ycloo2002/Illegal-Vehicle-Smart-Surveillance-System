@@ -4,7 +4,7 @@ This is the FYP project. The system aim for auto detact the vehicle license plat
 The system will generate the folder call save which will saving all the detaction result.
 The result include the csv file which having all the detaction result, video which plot out the result, the crop image
 
-This system take a longer time to excute or running for the detaction. example, 1 minit video take about 10 minit to complete the illeger detaction.
+This system take a longer time to excute or running for the detaction. example, 1 minute video take about 10 minute to complete the illeger detaction.
 
 The data will be came for the csv file which under the utils folder.
 

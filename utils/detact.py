@@ -128,7 +128,7 @@ def text_reconise(img,reader):
                
                                 
         #continue when the lp reconigse having more that equal to 70%    
-        if avg_lp_score >= 0.8:   
+        if avg_lp_score >= 0.9:   
             
             #lp pattern set : start from letter and must contain two character and at least one number and not contain any symbol   
             pattern =r'^[a-zA-Z][a-zA-Z0-9]*[0-9][a-zA-Z0-9]*$'
@@ -190,7 +190,6 @@ def insert_table_info(table,data,image_path,invalid=False,message="",vehicle_onw
     # Optionally set row height and column width to ensure the image fits
     choice.setRowHeight(row_count, 110)
     choice.setColumnWidth(0, 110)
-         
     
     choice.setItem(row_count, 1, QTableWidgetItem(data[0]))
     choice.setItem(row_count, 2, QTableWidgetItem(data[1]))
@@ -353,7 +352,6 @@ class Detaction(QObject):
         for vehicle_detection in vehicle_detaction_results.boxes.data.tolist():         
             vx1, vy1, vx2, vy2, vscore, vclass_id = vehicle_detection
             
-            print(vscore)
             #get the correct classes and the the predict score more that equal to 80%
             if int(vclass_id) in load.vehicles and vscore >= 0.8:
                     
@@ -434,7 +432,7 @@ class Detaction(QObject):
                                 
                                 drawbox(new_frame,int(vx1),int(vx2),int(vy1),int(vy2),f'{vehicle_plate[1]}_{load.vehicles[vclass_id]}_{v_brand}{color_result}',(255, 0, 0), 5)      
             
-        load.gui.runing_text.setText(f"Loading. \n Total {load.total_vehicle} vehicle detacted and \n{load.total_warnning} is detacted as illeger vehicle.")    
+        load.gui.runing_text.setText(f"Loading. \n Total {load.total_vehicle} vehicle detacted and \n{load.total_warnning} is detacted as illegel vehicle.")    
         return new_frame 
     
     @Slot()
@@ -489,10 +487,10 @@ class Detaction(QObject):
         # Calculate the elapsed time
         running_time =time.time()- start_time
 
-        print(f"Total {load.total_vehicle} vehicle detacted and {load.total_warnning} is detacted as illeger vehicle")
+        print(f"Total {load.total_vehicle} vehicle detacted and {load.total_warnning} is detacted as illegel vehicle")
         print("\nProgram running time:", running_time/60, "minutes")
         
-        load.gui.runing_text.setText(f"Detaction End. \n Total {load.total_vehicle} vehicle detacted and \n{load.total_warnning} is detacted as illeger vehicle \nTime Taken : {round(running_time/60 , 2)} minutes")
+        load.gui.runing_text.setText(f"Detaction End. \n Total {load.total_vehicle} vehicle detacted and \n{load.total_warnning} is detacted as illegel vehicle \nTime Taken : {round(running_time/60 , 2)} minutes")
         load.gui.text_container.setStyleSheet("background-color:lightgreen;")
         load.gui.result_home_btn.setEnabled(True)
         load.gui.stop_running_btn.setEnabled(False)
@@ -519,10 +517,10 @@ class Detaction(QObject):
         # Calculate the elapsed time
         running_time = end_time - start_time
         
-        print(f"Total {load.total_vehicle} vehicle detacted and {load.total_warnning} is detacted as illeger vehicle")
+        print(f"Total {load.total_vehicle} vehicle detacted and {load.total_warnning} is detacted as illegel vehicle")
         print("\nProgram running time:", running_time/60, "minutes")
         
-        load.gui.runing_text.setText(f"Detaction End. \n Total {load.total_vehicle} vehicle detacted and \n{load.total_warnning} is detacted as illeger vehicle \nTime Taken : {round(running_time/60 , 2)} minutes")
+        load.gui.runing_text.setText(f"Detaction End. \n Total {load.total_vehicle} vehicle detacted and \n{load.total_warnning} is detacted as illegel vehicle \nTime Taken : {round(running_time/60 , 2)} minutes")
         load.gui.text_container.setStyleSheet("background-color:lightgreen;")
         load.gui.result_home_btn.setEnabled(True)
         load.gui.stop_running_btn.setEnabled(False)
@@ -587,10 +585,10 @@ class Detaction(QObject):
             # Calculate the elapsed time
             running_time = end_time - start_time
 
-            print(f"Total {load.total_vehicle} vehicle detacted and {load.total_warnning} is detacted as illeger vehicle")
+            print(f"Total {load.total_vehicle} vehicle detacted and {load.total_warnning} is detacted as illegel vehicle")
             print("\nProgram running time:", running_time/60, "minutes")
             
-            load.gui.runing_text.setText(f"Detaction End. \n Total {load.total_vehicle} vehicle detacted and \n{load.total_warnning} is detacted as illeger vehicle \nTime Taken : {round(running_time/60 , 2)} minutes")
+            load.gui.runing_text.setText(f"Detaction End. \n Total {load.total_vehicle} vehicle detacted and \n{load.total_warnning} is detacted as illegel vehicle \nTime Taken : {round(running_time/60 , 2)} minutes")
             load.gui.text_container.setStyleSheet("background-color:lightgreen;")
             load.gui.result_home_btn.setEnabled(True)
             load.gui.stop_running_btn.setEnabled(False)
