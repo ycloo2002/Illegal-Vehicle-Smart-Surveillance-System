@@ -128,7 +128,7 @@ def text_reconise(img,reader):
                
                                 
         #continue when the lp reconigse having more that equal to 70%    
-        if avg_lp_score >= 0.8:   
+        if avg_lp_score >= 0.9:   
             
             #lp pattern set : start from letter and must contain two character and at least one number and not contain any symbol   
             pattern =r'^[a-zA-Z][a-zA-Z0-9]*[0-9][a-zA-Z0-9]*$'
@@ -190,7 +190,6 @@ def insert_table_info(table,data,image_path,invalid=False,message="",vehicle_onw
     # Optionally set row height and column width to ensure the image fits
     choice.setRowHeight(row_count, 110)
     choice.setColumnWidth(0, 110)
-         
     
     choice.setItem(row_count, 1, QTableWidgetItem(data[0]))
     choice.setItem(row_count, 2, QTableWidgetItem(data[1]))
@@ -206,37 +205,46 @@ def check_invalid_vehicle(result_data,path):
     #default
     code = "notfound"
     onwer_name = ""
-    
+    a_typr = ""
+    a_brand = ""
+    a_color = ""
     #open the database file
     with open(path, 'r', newline='') as csvfile:
         reader = csv.reader(csvfile)
         for col in reader:
+            
             if col[2] == result_data[1]: # true in vehicle plate 
                 code = "r"
                 onwer_name = col[1]
                 #type
-                if col[3] != result_data[2]: code += "T"
+                if col[3] != result_data[2]: 
+                    code += "T"
+                    a_typr = col[3]
                 
                 #brand
-                if col[4] != result_data[3]: code += "B"
+                if col[4] != result_data[3]: 
+                    code += "B"
+                    a_brand = col[4]
                 
                 #color
-                if col[5] != result_data[4]: code += "C"
+                if col[5] != result_data[4]: 
+                    code += "C"
+                    a_color = col[5]
                 
                 break
         
     match code:
         case "notfound" : return True,"This License Plate not register in the system.",onwer_name
         
-        case "rTBC" : return True,"Invalid Vehicle Type, Brand and Colour for this License Plate.",onwer_name
-        case "rTB" : return True,"Invalid Vehicle Type, Brand and Colour for this License Plate.",onwer_name
-        case "rTC" : return True,"Invalid Vehicle Type and Colour for this License Plate.",onwer_name
-        case "rT" : return True,"Invalid Vehicle Type for this License Plate.",onwer_name
+        case "rTBC" : return True,f"Invalid Vehicle Type, Brand and Colour for this License Plate.\nThe register type is '{a_typr}' ,brand is '{a_brand}' and colour is '{a_color}'",onwer_name
+        case "rTB" : return True,f"Invalid Vehicle Type, Brand and Colour for this License Plate. \nThe register type is '{a_typr}' and brand is '{a_brand}'",onwer_name
+        case "rTC" : return True,f"Invalid Vehicle Type and Colour for this License Plate. \nThe register type is '{a_typr}' and colour is '{a_color}'",onwer_name
+        case "rT" : return True,f"Invalid Vehicle Type for this License Plate. \nThe register colour is '{a_typr}'",onwer_name
             
-        case "rB" : return True,"Invalid Vehicle Brand for this License Plate.",onwer_name
-        case "rBC" : return True,"Invalid Vehicle Brand and Colour for this License Plate.",onwer_name
+        case "rB" : return True,f"Invalid Vehicle Brand for this License Plate. \nThe register brand is '{a_brand}'",onwer_name
+        case "rBC" : return True,f"Invalid Vehicle Brand and Colour for this License Plate. \nThe register brand is '{a_brand}' and colour is '{a_color}'",onwer_name
             
-        case "rC" : return True,"Invalid Vehicle Colour for this License Plate.",onwer_name
+        case "rC" : return True,f"Invalid Vehicle Colour for this License Plate. \nThe register colour is '{a_color}'",onwer_name
         
         case "r" : return False,"No error found.",onwer_name
 
@@ -353,7 +361,6 @@ class Detaction(QObject):
         for vehicle_detection in vehicle_detaction_results.boxes.data.tolist():         
             vx1, vy1, vx2, vy2, vscore, vclass_id = vehicle_detection
             
-            print(vscore)
             #get the correct classes and the the predict score more that equal to 80%
             if int(vclass_id) in load.vehicles and vscore >= 0.8:
                     
@@ -434,7 +441,7 @@ class Detaction(QObject):
                                 
                                 drawbox(new_frame,int(vx1),int(vx2),int(vy1),int(vy2),f'{vehicle_plate[1]}_{load.vehicles[vclass_id]}_{v_brand}{color_result}',(255, 0, 0), 5)      
             
-        load.gui.runing_text.setText(f"Loading. \n Total {load.total_vehicle} vehicle detacted and \n{load.total_warnning} is detacted as illeger vehicle.")    
+        load.gui.runing_text.setText(f"Loading. \n Total {load.total_vehicle} vehicle detacted and \n{load.total_warnning} is detacted as illegel vehicle.")    
         return new_frame 
     
     @Slot()
@@ -489,10 +496,10 @@ class Detaction(QObject):
         # Calculate the elapsed time
         running_time =time.time()- start_time
 
-        print(f"Total {load.total_vehicle} vehicle detacted and {load.total_warnning} is detacted as illeger vehicle")
+        print(f"Total {load.total_vehicle} vehicle detacted and {load.total_warnning} is detacted as illegel vehicle")
         print("\nProgram running time:", running_time/60, "minutes")
         
-        load.gui.runing_text.setText(f"Detaction End. \n Total {load.total_vehicle} vehicle detacted and \n{load.total_warnning} is detacted as illeger vehicle \nTime Taken : {round(running_time/60 , 2)} minutes")
+        load.gui.runing_text.setText(f"Detaction End. \n Total {load.total_vehicle} vehicle detacted and \n{load.total_warnning} is detacted as illegel vehicle \nTime Taken : {round(running_time/60 , 2)} minutes")
         load.gui.text_container.setStyleSheet("background-color:lightgreen;")
         load.gui.result_home_btn.setEnabled(True)
         load.gui.stop_running_btn.setEnabled(False)
@@ -519,10 +526,10 @@ class Detaction(QObject):
         # Calculate the elapsed time
         running_time = end_time - start_time
         
-        print(f"Total {load.total_vehicle} vehicle detacted and {load.total_warnning} is detacted as illeger vehicle")
+        print(f"Total {load.total_vehicle} vehicle detacted and {load.total_warnning} is detacted as illegel vehicle")
         print("\nProgram running time:", running_time/60, "minutes")
         
-        load.gui.runing_text.setText(f"Detaction End. \n Total {load.total_vehicle} vehicle detacted and \n{load.total_warnning} is detacted as illeger vehicle \nTime Taken : {round(running_time/60 , 2)} minutes")
+        load.gui.runing_text.setText(f"Detaction End. \n Total {load.total_vehicle} vehicle detacted and \n{load.total_warnning} is detacted as illegel vehicle \nTime Taken : {round(running_time/60 , 2)} minutes")
         load.gui.text_container.setStyleSheet("background-color:lightgreen;")
         load.gui.result_home_btn.setEnabled(True)
         load.gui.stop_running_btn.setEnabled(False)
@@ -587,10 +594,10 @@ class Detaction(QObject):
             # Calculate the elapsed time
             running_time = end_time - start_time
 
-            print(f"Total {load.total_vehicle} vehicle detacted and {load.total_warnning} is detacted as illeger vehicle")
+            print(f"Total {load.total_vehicle} vehicle detacted and {load.total_warnning} is detacted as illegel vehicle")
             print("\nProgram running time:", running_time/60, "minutes")
             
-            load.gui.runing_text.setText(f"Detaction End. \n Total {load.total_vehicle} vehicle detacted and \n{load.total_warnning} is detacted as illeger vehicle \nTime Taken : {round(running_time/60 , 2)} minutes")
+            load.gui.runing_text.setText(f"Detaction End. \n Total {load.total_vehicle} vehicle detacted and \n{load.total_warnning} is detacted as illegel vehicle \nTime Taken : {round(running_time/60 , 2)} minutes")
             load.gui.text_container.setStyleSheet("background-color:lightgreen;")
             load.gui.result_home_btn.setEnabled(True)
             load.gui.stop_running_btn.setEnabled(False)
