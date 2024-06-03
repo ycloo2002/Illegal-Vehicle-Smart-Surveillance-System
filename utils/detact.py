@@ -205,37 +205,46 @@ def check_invalid_vehicle(result_data,path):
     #default
     code = "notfound"
     onwer_name = ""
-    
+    a_typr = ""
+    a_brand = ""
+    a_color = ""
     #open the database file
     with open(path, 'r', newline='') as csvfile:
         reader = csv.reader(csvfile)
         for col in reader:
+            
             if col[2] == result_data[1]: # true in vehicle plate 
                 code = "r"
                 onwer_name = col[1]
                 #type
-                if col[3] != result_data[2]: code += "T"
+                if col[3] != result_data[2]: 
+                    code += "T"
+                    a_typr = col[3]
                 
                 #brand
-                if col[4] != result_data[3]: code += "B"
+                if col[4] != result_data[3]: 
+                    code += "B"
+                    a_brand = col[4]
                 
                 #color
-                if col[5] != result_data[4]: code += "C"
+                if col[5] != result_data[4]: 
+                    code += "C"
+                    a_color = col[5]
                 
                 break
         
     match code:
         case "notfound" : return True,"This License Plate not register in the system.",onwer_name
         
-        case "rTBC" : return True,"Invalid Vehicle Type, Brand and Colour for this License Plate.",onwer_name
-        case "rTB" : return True,"Invalid Vehicle Type, Brand and Colour for this License Plate.",onwer_name
-        case "rTC" : return True,"Invalid Vehicle Type and Colour for this License Plate.",onwer_name
-        case "rT" : return True,"Invalid Vehicle Type for this License Plate.",onwer_name
+        case "rTBC" : return True,f"Invalid Vehicle Type, Brand and Colour for this License Plate.\nThe register type is '{a_typr}' ,brand is '{a_brand}' and colour is '{a_color}'",onwer_name
+        case "rTB" : return True,f"Invalid Vehicle Type, Brand and Colour for this License Plate. \nThe register type is '{a_typr}' and brand is '{a_brand}'",onwer_name
+        case "rTC" : return True,f"Invalid Vehicle Type and Colour for this License Plate. \nThe register type is '{a_typr}' and colour is '{a_color}'",onwer_name
+        case "rT" : return True,f"Invalid Vehicle Type for this License Plate. \nThe register colour is '{a_typr}'",onwer_name
             
-        case "rB" : return True,"Invalid Vehicle Brand for this License Plate.",onwer_name
-        case "rBC" : return True,"Invalid Vehicle Brand and Colour for this License Plate.",onwer_name
+        case "rB" : return True,f"Invalid Vehicle Brand for this License Plate. \nThe register brand is '{a_brand}'",onwer_name
+        case "rBC" : return True,f"Invalid Vehicle Brand and Colour for this License Plate. \nThe register brand is '{a_brand}' and colour is '{a_color}'",onwer_name
             
-        case "rC" : return True,"Invalid Vehicle Colour for this License Plate.",onwer_name
+        case "rC" : return True,f"Invalid Vehicle Colour for this License Plate. \nThe register colour is '{a_color}'",onwer_name
         
         case "r" : return False,"No error found.",onwer_name
 

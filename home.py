@@ -56,6 +56,8 @@ class MainWindow(QMainWindow):
             }
         """
         
+        self.pervios_icon = f'{basedir}/utils/img/previous.png'
+        
         self.setWindowTitle("Illegal Vehicle Smart Surveillance")
         self.setStyleSheet("background-color: #add8e6;")
         
@@ -149,7 +151,7 @@ class MainWindow(QMainWindow):
         back_button = QPushButton("", self.input)
         back_button.clicked.connect(self.back_to_home)
         
-        icon = QIcon("utils\img\previous.png")  # Replace with any icon name from the list
+        icon = QIcon(self.pervios_icon)  # Replace with any icon name from the list
         back_button.setIcon(icon)
         back_button.setIconSize(icon.actualSize(back_button.sizeHint()))
         back_button.setStyleSheet("background-color: transparent;")
@@ -346,7 +348,7 @@ class MainWindow(QMainWindow):
         back_button = QPushButton("", self.history)
         back_button.clicked.connect(self.go_to_input)
         
-        icon = QIcon("utils\img\previous.png")  # Replace with any icon name from the list
+        icon = QIcon(self.pervios_icon)  # Replace with any icon name from the list
         back_button.setIcon(icon)
         back_button.setIconSize(icon.actualSize(back_button.sizeHint()))
         back_button.setStyleSheet("background-color: transparent;")
@@ -380,7 +382,7 @@ class MainWindow(QMainWindow):
         back_button = QPushButton("", self.history_details)
         back_button.clicked.connect(self.go_to_history)
         
-        icon = QIcon("utils\img\previous.png")  # Replace with any icon name from the list
+        icon = QIcon(self.pervios_icon)  # Replace with any icon name from the list
         back_button.setIcon(icon)
         back_button.setIconSize(icon.actualSize(back_button.sizeHint()))
         back_button.setStyleSheet("background-color: transparent;")
@@ -418,7 +420,7 @@ class MainWindow(QMainWindow):
         self.table_history.clearContents()  # Clear the cell contents
         self.table_history.setRowCount(0)
         
-        save_folder_path = f"{basedir}/save"
+        save_folder_path = f"save"
         
         if os.path.isdir(save_folder_path):
             result_folder_path  = [f.path for f in os.scandir(save_folder_path) if f.is_dir()]
@@ -455,7 +457,8 @@ class MainWindow(QMainWindow):
                         #set button
                         action_btn = QPushButton("More")
                         action_btn.clicked.connect(partial(self.go_to_history_details, folder))
-                        icon = QIcon("utils\img\mi.png")  # Replace with any icon name from the list
+                        more_icon = f"{basedir}/utils/img/mi.png"
+                        icon = QIcon(more_icon)  # Replace with any icon name from the list
                         action_btn.setIcon(icon)
                         action_btn.setIconSize(icon.actualSize(action_btn.sizeHint()))
                         action_btn.setStyleSheet("""                                      
@@ -564,7 +567,7 @@ class MainWindow(QMainWindow):
         self.text_container.setStyleSheet("background-color:red;")
         QApplication.processEvents() 
         
-        self.next_page()
+        self.stacked_widget.setCurrentIndex(2)
         
         self.run_detaction = Detaction(self,"")
         self.worker_thread = QThread()
@@ -596,8 +599,8 @@ class MainWindow(QMainWindow):
                 # Check if selected file is an image or a video
                 if any(lower_file_path.endswith(ext) for ext in (".png", ".jpg", ".jpeg", ".bmp", ".gif")):
                     print("Image file path",file_path)
-                    self.next_page()
-                    
+                    self.stacked_widget.setCurrentIndex(2)
+
                     self.run_detaction = Detaction(self,file_path)
                     self.worker_thread = QThread()
                     
@@ -608,8 +611,8 @@ class MainWindow(QMainWindow):
                     
                 elif any(lower_file_path.endswith(ext) for ext in (".mp4", ".avi", ".mov")):
                     print(file_path)
-                    self.next_page()
-                    
+                    self.stacked_widget.setCurrentIndex(2)
+
                     self.run_detaction = Detaction(self,file_path)
                     self.worker_thread = QThread()
 
@@ -683,7 +686,8 @@ if __name__ == "__main__":
     sys.stdout = sys.stderr = Tee(sys.stdout, log_file)
     
     app = QApplication(sys.argv)
-    app.setWindowIcon(QIcon(f'utils/img/icon.png'))
+    icon = f'{basedir}/utils/img/icon.ico'
+    app.setWindowIcon(QIcon(icon))
     window = MainWindow()
     window.setMinimumSize(QSize(1000, 600)) 
     window.show()

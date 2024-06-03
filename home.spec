@@ -1,11 +1,11 @@
 # -*- mode: python ; coding: utf-8 -*-
-
+import os
 block_cipher = None
 a = Analysis(
     ['home.py'],
     pathex=['.'],
     binaries=[],
-    datas=[("utils","utils"),("utils\img\icon.png","."),("utils/model/default.yaml", 'ultralytics/cfg')],
+    datas=[("utils","utils"),("utils/model/default.yaml", 'ultralytics/cfg')],
     hiddenimports=['ultralytics','numpy', 'opencv-python','torch'],
     hookspath=[],
     hooksconfig={},
@@ -32,9 +32,8 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='utils\img\icon.png'
+    icon=os.path.abspath('utils/img/icon.ico') 
 )
-
 coll = COLLECT(
     exe,
     a.binaries,
