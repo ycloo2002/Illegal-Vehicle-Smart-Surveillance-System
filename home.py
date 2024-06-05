@@ -1,5 +1,5 @@
 import sys
-from utils.detact import Detaction,Load_Object
+from utils.detact import Detection,Load_Object
 from PySide6.QtCore import QSize, Qt,Slot,QThread
 from PySide6.QtGui import QFont,QIcon,QPixmap,QColor,QPainter
 from functools import partial
@@ -34,7 +34,23 @@ except ImportError:
 basedir = os.path.dirname(__file__)
 
 FF = 'Verdana'
-    
+class Tee:
+    def __init__(self, *files):
+        self.files = files
+
+    def write(self, text):
+        for file in self.files:
+            if file is not None:
+                file.write(text)
+                file.flush()  # Ensure output is written immediately
+            else:
+                print("Warning: One of the file objects is None!")
+
+    def flush(self):
+        for file in self.files:
+            if file is not None:
+                file.flush()
+     
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -90,6 +106,9 @@ class MainWindow(QMainWindow):
         self.load_object = Load_Object()
             
     def init_home(self):
+        """
+        the init for home page.
+        """
         layout = QVBoxLayout(self.home)
         #title 
         self.title = QLabel("Illegal Vehicle Smart Surveillance")
@@ -145,6 +164,9 @@ class MainWindow(QMainWindow):
         layout.addLayout(v_box)
         
     def init_input(self):
+        """
+        init for the selection page. Include the live,video/image and history option
+        """
         layout = QVBoxLayout(self.input)
 
         # Create a back button
@@ -215,7 +237,9 @@ class MainWindow(QMainWindow):
         layout.addStretch()   
    
     def init_result(self):
-        
+        """
+        Display the result gui.Include the two table ( detection table and illegal detection table) and live image
+        """
         self.layout_result = QVBoxLayout(self.result)
         
         # section 1
@@ -342,6 +366,9 @@ class MainWindow(QMainWindow):
         self.layout_result.addLayout(hh_text)     
         
     def init_history(self):
+        """
+        display the history list as the table
+        """
         self.layout_history = QVBoxLayout(self.history)
 
         # Create a back button
@@ -376,6 +403,9 @@ class MainWindow(QMainWindow):
         self.layout_history.addWidget(self.table_history)
     
     def init_history_details(self):
+        """
+        display the selected result.
+        """
         self.layout_history_details = QVBoxLayout(self.history_details)
 
         # Create a back button
@@ -410,17 +440,25 @@ class MainWindow(QMainWindow):
         self.layout_history_details.addWidget(self.history_details_table)
             
     def back_to_home(self):
+        """
+        go to the home gui
+        """
         self.stacked_widget.setCurrentIndex(0)
         
     def go_to_input(self):
+        """
+        go to the selection page
+        """
         self.stacked_widget.setCurrentIndex(1)
         
     def go_to_history(self):
-        
+        """
+        Go to the history list page. It will clear the old information on the table and load the new information
+        """
         self.table_history.clearContents()  # Clear the cell contents
         self.table_history.setRowCount(0)
         
-        save_folder_path = f"save"
+        save_folder_path = f"result"
         
         if os.path.isdir(save_folder_path):
             result_folder_path  = [f.path for f in os.scandir(save_folder_path) if f.is_dir()]
@@ -479,7 +517,12 @@ class MainWindow(QMainWindow):
         self.stacked_widget.setCurrentIndex(3)
      
     def go_to_history_details(self,folder_path):
-        
+        """
+        go to the history details page. auto generate the latest information
+
+        Args:
+            folder_path (str): folder path
+        """
         self.history_details_table.clearContents()  # Clear the cell contents
         self.history_details_table.setRowCount(0)
  
@@ -546,6 +589,12 @@ class MainWindow(QMainWindow):
         self.stacked_widget.setCurrentIndex(4)
                                 
     def resizeEvent(self, event):
+        """
+        resize the qlabel for the image at the result page
+
+        Args:
+            event (_type_): _description_
+        """
         # Override resizeEvent to adjust layout and image size based on window size
         super().resizeEvent(event)
 
@@ -554,7 +603,6 @@ class MainWindow(QMainWindow):
         available_width = self.width() - layout_margins.left() - layout_margins.right()
         vailable_height = self.height() - layout_margins.top() - layout_margins.bottom()
 
-
         #set for the result_page image
         self.label_img.setFixedSize(int(available_width*0.5),int(vailable_height*0.4))
 
@@ -562,6 +610,9 @@ class MainWindow(QMainWindow):
         self.label_img.setScaledContents(True)
     
     def live_camera(self):
+        """
+        create detaction classes and call the live detection function.It will transfer the live detaction function to thread 
+        """
         print("open camera")
         self.runing_text.setText(f"Loading")
         self.text_container.setStyleSheet("background-color:red;")
@@ -569,7 +620,7 @@ class MainWindow(QMainWindow):
         
         self.stacked_widget.setCurrentIndex(2)
         
-        self.run_detaction = Detaction(self,"")
+        self.run_detaction = Detection(self,"")
         self.worker_thread = QThread()
 
         self.run_detaction.moveToThread(self.worker_thread)
@@ -581,7 +632,9 @@ class MainWindow(QMainWindow):
         self.run_detaction.finish.connect(self.detact_finish)  
                    
     def input_video_img(self):
-        
+        """
+        This is the function that let the user input the image or video resource. After getting the input, it will call the image detection for the image and video detection for the video input.
+        """
         self.runing_text.setText(f"Loading")
         self.text_container.setStyleSheet("background-color:red;")
         QApplication.processEvents() 
@@ -601,7 +654,7 @@ class MainWindow(QMainWindow):
                     print("Image file path",file_path)
                     self.stacked_widget.setCurrentIndex(2)
 
-                    self.run_detaction = Detaction(self,file_path)
+                    self.run_detaction = Detection(self,file_path)
                     self.worker_thread = QThread()
                     
                     self.run_detaction.moveToThread(self.worker_thread)
@@ -613,7 +666,7 @@ class MainWindow(QMainWindow):
                     print(file_path)
                     self.stacked_widget.setCurrentIndex(2)
 
-                    self.run_detaction = Detaction(self,file_path)
+                    self.run_detaction = Detection(self,file_path)
                     self.worker_thread = QThread()
 
                     self.run_detaction.moveToThread(self.worker_thread)
@@ -625,12 +678,20 @@ class MainWindow(QMainWindow):
                     self.warnning_popout("Unsupported file format.")
 
     def stop_task(self):
+        """
+        The function to stop the task and change the button enable at the result page. When the stop button click, the return home button will be enable and the stop button will be diable
+        """
         self.run_detaction.stop()  # Signal the worker to stop
         self.result_home_btn.setEnabled(True)
         self.stop_running_btn.setEnabled(False)
     
     @Slot(str)
     def warnning_popout(self,text):
+        """pop out the warnning message with the text given. After click ok button, it will redirect to home page
+
+        Args:
+            text (str): warnning text
+        """
         dlg = QMessageBox(self)
         dlg.setWindowTitle("Warning")
         dlg.setText(text)
@@ -646,6 +707,11 @@ class MainWindow(QMainWindow):
                     
     @Slot(str)
     def detact_finish(self,folder_name):
+        """pop out the information message box to tell the user the detection is end and tell when the result is save.
+
+        Args:
+            folder_name (str): the save folder path
+        """
         msg_box = QMessageBox()
         msg_box.setIcon(QMessageBox.Information)
         msg_box.setText(f"The detaction is complete. The result is save to {basedir}/{folder_name}")
@@ -656,44 +722,44 @@ class MainWindow(QMainWindow):
         self.close_thread()
         
     def close_thread(self):
+        """function to close the thread
+        """
         self.run_detaction.stop()
         self.worker_thread.quit()
         self.worker_thread.wait()   
 
-class Tee:
-    def __init__(self, *files):
-        self.files = files
-
-    def write(self, text):
-        for file in self.files:
-            file.write(text)
-            file.flush()  # Ensure output is written immediately
-
-    def flush(self):
-        for file in self.files:
-            file.flush()
-                                      
+                                     
 if __name__ == "__main__":
     
     #setup_env.check_and_install_packages()
     
-    # Redirect stdout and stderr to a file
-    log_file = open('Log File.log', 'w')
-    
-    # Duplicate stdout and stderr to the console and the log file
-    original_stdout = sys.stdout
-    original_stderr = sys.stderr
-    sys.stdout = sys.stderr = Tee(sys.stdout, log_file)
-    
-    app = QApplication(sys.argv)
-    icon = f'{basedir}/utils/img/icon.ico'
-    app.setWindowIcon(QIcon(icon))
-    window = MainWindow()
-    window.setMinimumSize(QSize(1000, 600)) 
-    window.show()
-    
-    # Execute the application
-    exit_code = app.exec()
+    try:
+        # Redirect stdout and stderr to a file
+        with open('Log File.log', 'w') as log_file:
+            # Duplicate stdout and stderr to the console and the log file
+            
+            original_stdout = sys.stdout
+            original_stderr = sys.stderr
+            sys.stdout = sys.stderr = Tee(sys.stdout, log_file)
+            
+            print("Starting application...")  # Debugging message
+            
+            app = QApplication(sys.argv)
+            icon = f'{basedir}/utils/img/icon.ico'
+            app.setWindowIcon(QIcon(icon))
+            window = MainWindow()
+            window.setMinimumSize(QSize(1000, 600)) 
+            window.show()
+            
+            # Execute the application
+            exit_code = app.exec()
 
-    log_file.close()
-    sys.exit(exit_code)
+            sys.stdout = original_stdout
+            sys.stderr = original_stderr
+
+            sys.exit(exit_code)
+    except Exception as e:
+        # Handle and log any exceptions
+        with open('Log File.log', 'a') as log_file:
+            log_file.write(f"An error occurred: {str(e)}\n")
+        sys.exit(1)
