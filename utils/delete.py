@@ -7,7 +7,7 @@ import pytesseract
 from PIL import Image, ImageEnhance
 reader = easyocr.Reader(['en'], gpu=True)
 import time
-
+import sys
 def drawbox(img,x1,x2,y1,y2,label_text,color = (255, 0, 0),thickness = 5):
     """draw the rectangle box to the image with label
 
@@ -74,7 +74,8 @@ def text_reader(reader,img):
 def search_vehicle(frame,vehicel_model,plate):
     
     vehicle_detect =""
-    car_results = vehicel_model(frame,classes=[2,5,7])[0]                 
+    car_results = vehicel_model(frame,classes=[2,5,7])[0]
+             
     for detection in car_results.boxes.data.tolist():
         cx1,cy1, cx2, cy2, pscore, classid = detection   
         
@@ -84,7 +85,7 @@ def search_vehicle(frame,vehicel_model,plate):
         print(f"{plate[3]} < {cy2} = {plate[3] <= cy2}")
         print("\n")
         
-        if (plate[0] >= cx1 and plate[1] >= cy1) or (plate[2] <= cx2 and plate[3] <= cy2):
+        if plate[0] >= cx1 and plate[1] >= cy1 and plate[2] <= cx2 and plate[3] <= cy2:
             print(vehicle_detect)
             vehicle_detect = [cx1,cy1, cx2, cy2, classid]
             break
@@ -117,80 +118,106 @@ def search_plate(frame,plate_detection,reader,save_plate):
     
     return plate_detect
 
+class Tee:
+    def __init__(self, *files):
+        self.files = files
 
-vehicel_model = YOLO(f'utils/model/yolov8n.pt')
-plate_detection = YOLO("F:\\fyp_system\\utils\\model\\car_plate_v4.pt")
-#open video
-cap = cv2.VideoCapture("F:\\FYP_save\\dataset\\video_raw\\IMG_0139.MOV")
+    def write(self, text):
+        for file in self.files:
+            if file is not None:
+                file.write(text)
+                file.flush()  # Ensure output is written immediately
+            else:
+                print("Warning: One of the file objects is None!")
 
-vehicles = {2:"car",5:'bus', 7:'truck'}
-
- # Get the video frame width and height
-frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-        # Define the codec and create VideoWriter object 
-fourcc = cv2.VideoWriter_fourcc(*'XVID') 
-out = cv2.VideoWriter(f'F:\\fyp_system\\save\\crop_lp\\result_video.avi', fourcc, 25.0, (frame_width, frame_height))  
-
-save_plate = []              
-# Loop through the video frames
-
-start_time = time.time()
-while cap.isOpened():
-            
-    # Read a frame from the video
-    success, frame = cap.read()
-
-    if success:
-        new_frame = frame.copy()
-            
-        plate_detect = search_plate(frame,plate_detection,reader,save_plate)
-        
-        if len(plate_detect) > 0:
-            
-            for plate in plate_detect:
+    def flush(self):
+        for file in self.files:
+            if file is not None:
+                file.flush()
                 
-                save_plate.append(plate[4])
-                print(save_plate)
-                
-                vehicle_detect = search_vehicle(frame,vehicel_model,plate)
-                time.sleep(5)
-                #if plate[0] > vehicle[0] and plate[1] > vehicle[1] and plate[2] < vehicle[2] and plate[3] < vehicle[3]:
-                if not vehicle_detect == "":
-                    x1 = vehicle_detect[0] #max((plate[0]-500),0)
-                    y1 = vehicle_detect[1] #max((plate[1]-500),0)
-                    
-                    x2 = vehicle_detect[2] #min((plate[2]+600),frame_width)
-                    y2 = vehicle_detect[3] #min((plate[3]+800),frame_height)
-                            
-                    vehicle_crop = frame[int(y1):int(y2), int(x1): int(x2)]
-                            
-                        #save crop image path
-                    img_path = f'F:\\fyp_system\\save\\crop_lp\\{plate[4]}.jpg'
-                                                                    #save the image with the lp name.                                        
-                    cv2.imwrite(img_path, vehicle_crop)                                     
-        
-                        #drawbox(new_frame,int(vehicle[0]),int(vehicle[2]),int(vehicle[1]),int(vehicle[3]),f'{plate[4]}',(255, 0, 0), 5) 
-                else :
-                    vehicle_crop = frame[int(plate[1]):int(plate[3]), int(plate[0]): int(plate[2])]
-                    img_path = f'F:\\fyp_system\\save\\crop_lp\\LP_{plate[4]}.jpg'                                       
-                    cv2.imwrite(img_path, vehicle_crop)      
-                    
-                    img_path = f'F:\\fyp_system\\save\\crop_lp\\original_{plate[4]}.jpg'                                       
-                    cv2.imwrite(img_path, frame)   
-                                         
+with open('Log File.log', 'w') as log_file:
+            # Duplicate stdout and stderr to the console and the log file
             
-        out.write(new_frame)                    
-    else:
-                # Break the loop if the end of the video is reached
-        break
-        
-        # Release the video capture object and close the display window
-cap.release()
-out.release()
+    original_stdout = sys.stdout
+    original_stderr = sys.stderr
+    sys.stdout = sys.stderr = Tee(sys.stdout, log_file)
+    
+    vehicel_model = YOLO(f'utils/model/yolov8n.pt')
+    plate_detection = YOLO("F:\\fyp_system\\utils\\model\\car_plate_v4.pt")
+    #open video
+    cap = cv2.VideoCapture("F:\\FYP_save\\dataset\\video_raw\\IMG_0139.MOV")
 
-running_time =time.time()- start_time
+    vehicles = {2:"car",5:'bus', 7:'truck'}
 
-print("Running time : ",running_time)
-print(save_plate)
+    # Get the video frame width and height
+    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+            # Define the codec and create VideoWriter object 
+    fourcc = cv2.VideoWriter_fourcc(*'XVID') 
+    out = cv2.VideoWriter(f'F:\\fyp_system\\save\\crop_lp\\result_video.avi', fourcc, 25.0, (frame_width, frame_height))  
+
+    save_plate = []              
+    # Loop through the video frames
+
+    start_time = time.time()
+    while cap.isOpened():
+                
+        # Read a frame from the video
+        success, frame = cap.read()
+
+        if success:
+            new_frame = frame.copy()
+                
+            plate_detect = search_plate(frame,plate_detection,reader,save_plate)
+            
+            if len(plate_detect) > 0:
+                
+                for plate in plate_detect:
+                    
+                    save_plate.append(plate[4])
+                    print(save_plate)
+                    
+                    vehicle_detect = search_vehicle(frame,vehicel_model,plate)
+                    time.sleep(5)
+                    #if plate[0] > vehicle[0] and plate[1] > vehicle[1] and plate[2] < vehicle[2] and plate[3] < vehicle[3]:
+                    if not vehicle_detect == "":
+                        x1 = vehicle_detect[0] #max((plate[0]-500),0)
+                        y1 = vehicle_detect[1] #max((plate[1]-500),0)
+                        
+                        x2 = vehicle_detect[2] #min((plate[2]+600),frame_width)
+                        y2 = vehicle_detect[3] #min((plate[3]+800),frame_height)
+                                
+                        vehicle_crop = frame[int(y1):int(y2), int(x1): int(x2)]
+                                
+                            #save crop image path
+                        img_path = f'F:\\fyp_system\\save\\crop_lp\\{plate[4]}.jpg'
+                                                                        #save the image with the lp name.                                        
+                        cv2.imwrite(img_path, vehicle_crop)                                     
+            
+                            #drawbox(new_frame,int(vehicle[0]),int(vehicle[2]),int(vehicle[1]),int(vehicle[3]),f'{plate[4]}',(255, 0, 0), 5) 
+                    else :
+                        vehicle_crop = frame[int(plate[1]):int(plate[3]), int(plate[0]): int(plate[2])]
+                        img_path = f'F:\\fyp_system\\save\\crop_lp\\LP_{plate[4]}.jpg'                                       
+                        cv2.imwrite(img_path, vehicle_crop)      
+                        
+                        img_path = f'F:\\fyp_system\\save\\crop_lp\\original_{plate[4]}.jpg'                                       
+                        cv2.imwrite(img_path, frame)   
+                                            
+                
+            out.write(new_frame)                    
+        else:
+                    # Break the loop if the end of the video is reached
+            break
+            
+            # Release the video capture object and close the display window
+    cap.release()
+    out.release()
+
+    running_time =time.time()- start_time
+
+    print("Running time : ",running_time)
+    print(save_plate)
+
+    sys.stdout = original_stdout
+    sys.stderr = original_stderr

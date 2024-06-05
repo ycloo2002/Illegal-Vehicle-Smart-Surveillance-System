@@ -160,7 +160,7 @@ def search_vehicle(frame,vehicel_model,plate):
     Returns:
         array: x1,y1,x2,y2,score,classid
     """
-    vehicle_detect = []
+    vehicle_detect = ""
     car_results = vehicel_model(frame,classes=[2,5,7])[0]                 
     for detection in car_results.boxes.data.tolist():
         cx1,cy1, cx2, cy2, pscore, classid = detection 
@@ -416,8 +416,8 @@ class Load_Object():
         print("\nSuccessfully load Database path : ",load.database_path)
         
         
-        if not os.path.exists("save"):
-            os.makedirs("save")
+        if not os.path.exists("result"):
+            os.makedirs("result")
             print("Folder save created.")
     
 class Detection(QObject):
@@ -475,6 +475,7 @@ class Detection(QObject):
         """
         
         new_frame = load.frame.copy()
+        display_img(load.gui,new_frame)
             
         plate_detect = search_plate(load.frame,load.plate_detection,load.reader,load.save_plate)
         
@@ -484,7 +485,7 @@ class Detection(QObject):
                 
                 load.save_plate.append(plate[4])
                 
-                vehicle_detect,new_frame = search_vehicle(load.frame,load.vehicel_model,plate)
+                vehicle_detect = search_vehicle(load.frame,load.vehicel_model,plate)
 
                 if not vehicle_detect == "":
                     x1 = vehicle_detect[0]
@@ -614,7 +615,7 @@ class Detection(QObject):
         
         load.frame = cv2.imread(load.detact_input)
         cv2.imwrite(f'{load.new_folder_path}/original.png', load.frame)
-        
+        load.save_plate = []  
         load.vehicle_illegal_detection()
         
         end_time = time.time()
@@ -640,7 +641,7 @@ class Detection(QObject):
         """
         #open video
         cap = cv2.VideoCapture(0)
-
+        load.save_plate = []  
         if not cap.isOpened():
             print("Error: Could not open video stream.")
             load.warnning.emit("Unable to open the camera")
