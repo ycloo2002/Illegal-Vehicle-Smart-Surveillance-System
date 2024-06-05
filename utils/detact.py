@@ -160,14 +160,28 @@ def search_vehicle(frame,vehicel_model,plate):
     Returns:
         array: x1,y1,x2,y2,score,classid
     """
-    vehicle_detect = ""
-    car_results = vehicel_model(frame,classes=[2,5,7])[0]                 
+    vehicle_detect =""
+    car_results = vehicel_model(frame,classes=[2,5,7])[0]
+    vehicle_temp = [] 
+    success_detect = False   
+    d_x1 = [] 
+      
     for detection in car_results.boxes.data.tolist():
-        cx1,cy1, cx2, cy2, pscore, classid = detection 
-          
-        if plate[0] > cx1 and plate[1] > cy1 and plate[2] < cx2 and plate[3] < cy2:
+        cx1,cy1, cx2, cy2, pscore, classid = detection   
+        
+        if plate[0] >= cx1 and plate[1] >= cy1 and plate[2] <= cx2 and plate[3] <= cy2:
             vehicle_detect = [cx1,cy1, cx2, cy2, classid]
+            success_detect = True
             break
+        else:
+            vehicle_temp.append([cx1,cy1, cx2, cy2, classid])
+            d_x1.append(cx1)
+            
+    if not success_detect:
+        nearest_value = min(d_x1, key=lambda x: abs(x - plate[0]))
+        position = d_x1.index(nearest_value)
+        vehicle_detect = vehicle_temp[position]
+        print("N : ",nearest_value, "\n postion : ",position)
 
     return vehicle_detect
 
@@ -207,22 +221,26 @@ def search_plate(frame,plate_detection,reader,save_plate):
     
     return plate_detect
 
-def search_brand(brand_detection,img):
+def search_brand(brand_detection,brand,img):
     """Function to detect the brand
 
     Args:
         brand_detection (_type_): Yolo model for the brand detection
+        brand(list) : Class of the brand
         img (_type_): image
 
     Returns:
-        int: brand id
+        str: brand 
     """
+
     brand_detaction_results = brand_detection(img)[0]
 
     for detection in brand_detaction_results.boxes.data.tolist():
         bx1,by1, bx2, by2, bscore, bclassid = detection
 
-        return int(bclassid)
+        return brand[int(bclassid)]
+
+    return ""
         
 def color_reconigse(image, model,device):
     """Vehicle colour recognition
@@ -369,10 +387,10 @@ class Load_Object():
         print("\nload the nessary item")
         
         # Load the model
-        load.vehicel_model = YOLO(f'{utils_basedir}/model/yolov8n.pt')
+        load.vehicel_model = YOLO(f'{utils_basedir}/model/yolov8s.pt')
         print("\nSuccessfully load vehicle model")
         
-        load.plate_detection = YOLO(f'{utils_basedir}/model/car_plate_v4.pt')
+        load.plate_detection = YOLO(f'{utils_basedir}/model/car_plate_v5.pt')
         print("\nSuccessfully load plate model")
         
         load.brand_detection = YOLO(f'{utils_basedir}/model/brand_v3.pt')
@@ -498,7 +516,7 @@ class Detection(QObject):
                     vehicle_crop = load.frame[int(y1):int(y2), int(x1): int(x2)]
                     
                     #detect the brand
-                    detect_brand = load.brand[search_brand(load.brand_detection,vehicle_crop)]  
+                    detect_brand = search_brand(load.brand_detection,load.brand,vehicle_crop)  
                     
                     #detect vehicle colour           
                     detect_colour = load.colour_class[color_reconigse(vehicle_crop,load.color_model,load.device)]
@@ -522,8 +540,8 @@ class Detection(QObject):
                         insert_table_info(load.gui,result_data,img_path,invalid,message,vehicle_onwer)
                         load.total_warnning +=1
                                     
-                        #insert data to the csv file
-                        insert_csv(len(load.save_plate),result_data,load.csv_file_path,message)
+                    #insert data to the csv file
+                    insert_csv(len(load.save_plate),result_data,load.csv_file_path,message)
                                 
                     QApplication.processEvents() 
                     #drawbox(new_frame,int(vehicle[0]),int(vehicle[2]),int(vehicle[1]),int(vehicle[3]),f'{plate[4]}',(255, 0, 0), 5) 

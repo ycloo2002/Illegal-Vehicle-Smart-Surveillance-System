@@ -34,23 +34,8 @@ except ImportError:
 basedir = os.path.dirname(__file__)
 
 FF = 'Verdana'
-class Tee:
-    def __init__(self, *files):
-        self.files = files
+VERSION = "Beta 3.5"
 
-    def write(self, text):
-        for file in self.files:
-            if file is not None:
-                file.write(text)
-                file.flush()  # Ensure output is written immediately
-            else:
-                print("Warning: One of the file objects is None!")
-
-    def flush(self):
-        for file in self.files:
-            if file is not None:
-                file.flush()
-     
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -152,7 +137,7 @@ class MainWindow(QMainWindow):
         layout.addLayout(button_box)
         
         #version
-        version = QLabel("V 2.0 beta")
+        version = QLabel(VERSION)
         version.setFont(QFont(FF, 11))
         #version.setAlignment(Qt.AlignRight)
         version.setFixedSize(100, 20)
@@ -304,9 +289,9 @@ class MainWindow(QMainWindow):
         f_layout = QVBoxLayout(self.text_container)
         
         self.runing_text = QLabel("Loading")
-        self.runing_text.setFont(QFont(FF, 20))
+        self.runing_text.setFont(QFont(FF, 12))
         self.runing_text.setAlignment(Qt.AlignHCenter)
-        self.runing_text.setStyleSheet("text-align: center;margin: 10px 2px;color:white")
+        self.runing_text.setStyleSheet("text-align: center;color:white")
         
         f_layout.addWidget(self.runing_text)
         
@@ -319,7 +304,7 @@ class MainWindow(QMainWindow):
         self.stop_running_btn = QPushButton("Stop")
         self.stop_running_btn.clicked.connect(self.stop_task)
         self.stop_running_btn.setFont(QFont(FF, 12))
-        self.stop_running_btn.setFixedSize(150, 50)
+        self.stop_running_btn.setFixedSize(150, 30)
             
         button_style = """
                 QPushButton {
@@ -344,7 +329,7 @@ class MainWindow(QMainWindow):
         self.result_home_btn = QPushButton("Home")
         self.result_home_btn.clicked.connect(self.back_to_home)
         self.result_home_btn.setFont(QFont(FF, 12))
-        self.result_home_btn.setFixedSize(150, 50)
+        self.result_home_btn.setFixedSize(150, 30)
         self.result_home_btn.setEnabled(False)     
         button_style = """
                 QPushButton {
@@ -728,7 +713,23 @@ class MainWindow(QMainWindow):
         self.worker_thread.quit()
         self.worker_thread.wait()   
 
-                                     
+class Tee:
+    def __init__(self, *files):
+        self.files = files
+
+    def write(self, text):
+        for file in self.files:
+            if file is not None:
+                file.write(text)
+                file.flush()  # Ensure output is written immediately
+            else:
+                print("Warning: One of the file objects is None!")
+
+    def flush(self):
+        for file in self.files:
+            if file is not None:
+                file.flush()
+                                        
 if __name__ == "__main__":
     
     #setup_env.check_and_install_packages()
@@ -741,8 +742,6 @@ if __name__ == "__main__":
             original_stdout = sys.stdout
             original_stderr = sys.stderr
             sys.stdout = sys.stderr = Tee(sys.stdout, log_file)
-            
-            print("Starting application...")  # Debugging message
             
             app = QApplication(sys.argv)
             icon = f'{basedir}/utils/img/icon.ico'
@@ -763,3 +762,32 @@ if __name__ == "__main__":
         with open('Log File.log', 'a') as log_file:
             log_file.write(f"An error occurred: {str(e)}\n")
         sys.exit(1)
+        
+"""
+    #for apllication use. Delete the above and class tee, then uncomment this 
+    try:
+        # Redirect stdout and stderr to a file
+        with open('Log File.log', 'w') as log_file:
+            # Duplicate stdout and stderr to the console and the log file
+            
+            sys.stdout = log_file
+            sys.stderr = log_file
+            
+            app = QApplication(sys.argv)
+            icon = f'{basedir}/utils/img/icon.ico'
+            app.setWindowIcon(QIcon(icon))
+            window = MainWindow()
+            window.setMinimumSize(QSize(1000, 600)) 
+            window.show()
+            
+            # Execute the application
+            exit_code = app.exec()
+
+            sys.exit(exit_code)
+    except Exception as e:
+        # Handle and log any exceptions
+        with open('Log File.log', 'a') as log_file:
+            log_file.write(f"An error occurred: {str(e)}\n")
+        sys.exit(1)   
+        
+"""

@@ -66,7 +66,7 @@ def text_reader(reader,img):
         lp_text = lp_text.upper().replace(' ', '')
     
         #continue when the pattern is correct.
-        if re.match(pattern, lp_text):
+        if re.match(pattern, lp_text) and avg_lp_score>=0.5:
             return True,lp_text
     
     return False,""    
@@ -75,21 +75,33 @@ def search_vehicle(frame,vehicel_model,plate):
     
     vehicle_detect =""
     car_results = vehicel_model(frame,classes=[2,5,7])[0]
-             
+    vehicle_temp = [] 
+    success_detect = False   
+    d_x1 = [] 
+      
     for detection in car_results.boxes.data.tolist():
         cx1,cy1, cx2, cy2, pscore, classid = detection   
         
-        print(f"{plate[0]} > {cx1} = {plate[0] >= cx1}")
-        print(f"{plate[1]} > {cy1} = {plate[1] >= cy1}")
-        print(f"{plate[2]} < {cx2} = {plate[2] <= cx2}")
-        print(f"{plate[3]} < {cy2} = {plate[3] <= cy2}")
+        print(f"{plate[0]} >= {cx1} = {plate[0] >= cx1}")
+        print(f"{plate[1]} >= {cy1} = {plate[1] >= cy1}")
+        print(f"{plate[2]} <= {cx2} = {plate[2] <= cx2}")
+        print(f"{plate[3]} <= {cy2} = {plate[3] <= cy2}")
         print("\n")
         
         if plate[0] >= cx1 and plate[1] >= cy1 and plate[2] <= cx2 and plate[3] <= cy2:
-            print(vehicle_detect)
             vehicle_detect = [cx1,cy1, cx2, cy2, classid]
+            success_detect = True
             break
-
+        else:
+            vehicle_temp.append([cx1,cy1, cx2, cy2, classid])
+            d_x1.append(cx1)
+            
+    if not success_detect:
+        nearest_value = min(d_x1, key=lambda x: abs(x - plate[0]))
+        position = d_x1.index(nearest_value)
+        vehicle_detect = vehicle_temp[position]
+        print("N : ",nearest_value, "\n postion : ",position)
+            
     return vehicle_detect
 
 def search_plate(frame,plate_detection,reader,save_plate):
@@ -142,8 +154,8 @@ with open('Log File.log', 'w') as log_file:
     original_stderr = sys.stderr
     sys.stdout = sys.stderr = Tee(sys.stdout, log_file)
     
-    vehicel_model = YOLO(f'utils/model/yolov8n.pt')
-    plate_detection = YOLO("F:\\fyp_system\\utils\\model\\car_plate_v4.pt")
+    vehicel_model = YOLO(f'utils/model/yolov8s.pt')
+    plate_detection = YOLO("F:\\fyp_system\\utils\\model\\car_plate_v5.pt")
     #open video
     cap = cv2.VideoCapture("F:\\FYP_save\\dataset\\video_raw\\IMG_0139.MOV")
 
@@ -179,7 +191,6 @@ with open('Log File.log', 'w') as log_file:
                     print(save_plate)
                     
                     vehicle_detect = search_vehicle(frame,vehicel_model,plate)
-                    time.sleep(5)
                     #if plate[0] > vehicle[0] and plate[1] > vehicle[1] and plate[2] < vehicle[2] and plate[3] < vehicle[3]:
                     if not vehicle_detect == "":
                         x1 = vehicle_detect[0] #max((plate[0]-500),0)
