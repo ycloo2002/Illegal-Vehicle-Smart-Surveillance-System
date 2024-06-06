@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import torchvision.transforms as transforms
 import torchvision.models as models
-import numpy as np
+import matplotlib
 from datetime import datetime
 from ultralytics import YOLO
 from PIL import Image
@@ -21,6 +21,8 @@ from PySide6.QtWidgets import (
     QLabel
 )
 
+# Force matplotlib to not use any backend.
+matplotlib.use('Agg')
     
 def display_img(display,image):
     """display the image in the result page
@@ -235,7 +237,7 @@ class Load_Object():
         load.plate_detection = YOLO(f'{utils_basedir}/model/car_plate_v5.pt')
         print("\nSuccessfully load plate model")
         
-        load.brand_detection = YOLO(f'{utils_basedir}/model/brand_v3.pt')
+        load.brand_detection = YOLO(f'{utils_basedir}/model/brand_v4.pt')
         print("\nSuccessfully load brand model")
         
     
@@ -260,9 +262,7 @@ class Load_Object():
         
         # Initialize the OCR reader
         load.reader = easyocr.Reader(['en'], gpu=True)
-        
         print("\nSuccessfully load reader model")
-        
         
         #load.vehicles = {2:"car",5:'bus', 7:'truck'} # 2: 'car' ,3: 'motorcycle', 5: 'bus', 7: 'truck'
         #print("\n Successfully load vehicle : ",load.vehicles)
@@ -463,9 +463,9 @@ class Detection(QObject):
         image = image.to(load.device)
 
         # Set the model to evaluation mode and make prediction
-        load.model.eval()
+        load.color_model.eval()
         with torch.no_grad():
-            outputs = load.model(image)
+            outputs = load.color_model(image)
             _, predicted = torch.max(outputs, 1)
 
         return colour_class[predicted.item()]
@@ -552,9 +552,6 @@ class Detection(QObject):
         Args:
             load (_type_): _description_
         """
-        load.total_vehicle = 0  
-        
-        load.total_warnning = 0
         
         #get the file path and csv path
         load.open_folder_csv()
@@ -573,7 +570,10 @@ class Detection(QObject):
         #fourcc = cv2.VideoWriter_fourcc(*'XVID') 
         #out = cv2.VideoWriter(f'{load.new_folder_path}/result_video.avi', fourcc, 25.0, (frame_width, frame_height))
         
-        load.save_plate = []    
+        load.save_plate = []   
+        load.total_warnning = 0
+        load.lp_5_most = deque(maxlen=5)
+         
         # Loop through the video frames
         while cap.isOpened():
             
