@@ -12,14 +12,15 @@ import numpy as np
 from datetime import datetime
 from ultralytics import YOLO
 from PIL import Image
-
+from collections import deque, defaultdict
+from PySide6.QtGui import QPixmap, QIcon,QImage
+from PySide6.QtCore import QObject,Slot,Signal, QMutex, QMutexLocker,Qt
 from PySide6.QtWidgets import (
     QApplication,
     QTableWidgetItem,
     QLabel
 )
-from PySide6.QtGui import QPixmap, QIcon,QImage
-from PySide6.QtCore import QObject,Slot,Signal, QMutex, QMutexLocker,Qt
+
     
 def display_img(display,image):
     """display the image in the result page
@@ -81,20 +82,18 @@ def data_and_time():
     date = datetime.now()
     return str(date.strftime('%Y-%m-%d %H-%M-%S')) 
     
-def insert_csv(no,data,csv_path,message):
+def insert_csv(csv_path,data):
     """insert the text to the csv file
 
     Args:
         no (int): the no 
-        data (array): the array should contain plate number, vehicle type,vehicle model and vehicle colour
+        data (dictionary): contain all the result data
         csv_path (str): the input csv file path
-        message (str): the warnning message that insert at the last column
     """
-    data_with_index = [str(no)] + data + [message]
     
     with open(csv_path, 'a', newline='') as csvfile:
         writer = csv.writer(csvfile)
-        writer.writerow(data_with_index)   
+        writer.writerow(data)   
     
 def create_csv(path):
     """create the csv file for saving the detection result
@@ -114,179 +113,15 @@ def create_csv(path):
         
     return csv_file_path
             
-def text_reader(reader,img):
-    """Function to convert the LP image to text.
+def insert_table_info(table,data,invalid=False):
+    """Insert data to the result gui. 
+    If the invalid = True, adding to the warnning message table. 
+    If invalid = False, insert to defalut table
 
     Args:
-        reader (_type_): model for the reader
-        img (_type_): image for the detection
-
-    Returns:
-        bool: the result 
-        str: LP text
-    """
-    #define the pattern
-    pattern =r'^[a-zA-Z][a-zA-Z0-9]*[0-9][a-zA-Z0-9]*$'
-    
-    #read the text
-    text_result =reader.readtext(img)              
-    #if non of the result showing out  
-      
-    if text_result:          
-        total_score =0
-        lp_text = "" 
-               
-        #combine the text
-        for (bbox, text, score) in text_result:
-            lp_text += text
-            total_score += score
-                                        
-        avg_lp_score = total_score/len(text_result)
-        
-        lp_text = lp_text.upper().replace(' ', '')
-    
-        #continue when the pattern is correct.
-        if re.match(pattern, lp_text) and avg_lp_score > 0.5:
-            return True,lp_text
-    
-    return False,""    
-                    
-def search_vehicle(frame,vehicel_model,plate):
-    """Function to detect the vehicle with the YOLO.Return all the result with 0.8 accuracy
-
-    Args:
-        frame (_type_): image
-        vehicel_model (_type_): YOLO model for the vehicle detection
-        plate(array): the array contain the plate information
-    Returns:
-        array: x1,y1,x2,y2,score,classid
-    """
-    vehicle_detect =""
-    car_results = vehicel_model(frame,classes=[2,5,7])[0]
-    vehicle_temp = [] 
-    success_detect = False   
-    d_x1 = [] 
-      
-    for detection in car_results.boxes.data.tolist():
-        cx1,cy1, cx2, cy2, pscore, classid = detection   
-        
-        if plate[0] >= cx1 and plate[1] >= cy1 and plate[2] <= cx2 and plate[3] <= cy2:
-            vehicle_detect = [cx1,cy1, cx2, cy2, classid]
-            success_detect = True
-            break
-        else:
-            vehicle_temp.append([cx1,cy1, cx2, cy2, classid])
-            d_x1.append(cx1)
-            
-    if not success_detect:
-        nearest_value = min(d_x1, key=lambda x: abs(x - plate[0]))
-        position = d_x1.index(nearest_value)
-        vehicle_detect = vehicle_temp[position]
-        print("N : ",nearest_value, "\n postion : ",position)
-
-    return vehicle_detect
-
-def search_plate(frame,plate_detection,reader,save_plate):
-    """detect the LP and call the function to read LP text. 
-
-    Args:
-        frame (_type_): image
-        plate_detection (_type_): LP YOLO model
-        reader (_type_): Reader model
-        save_plate (array): the array that saving the plate_no
-
-    Returns:
-        array: the location of x1,y1,x2,y2 and the result
-    """
-    plate_detect = []
-    
-    car_plate_results = plate_detection(frame)[0]                   
-    for detection in car_plate_results.boxes.data.tolist():
-        px1,py1, px2, py2, pscore, classid = detection                       
-                          
-        if pscore >= 0.8:
-                        
-            lp_crop = frame[int(py1):int(py2), int(px1): int(px2)]    
-
-            reader_result,result = text_reader(reader,lp_crop)
-            
-            if reader_result:
-                
-                same_lp = False
-                for plate_no in save_plate:
-                    if result == plate_no:
-                        same_lp = True
-                        break
-                
-                if not same_lp : plate_detect.append([px1,py1,px2,py2,result])
-    
-    return plate_detect
-
-def search_brand(brand_detection,brand,img):
-    """Function to detect the brand
-
-    Args:
-        brand_detection (_type_): Yolo model for the brand detection
-        brand(list) : Class of the brand
-        img (_type_): image
-
-    Returns:
-        str: brand 
-    """
-
-    brand_detaction_results = brand_detection(img)[0]
-
-    for detection in brand_detaction_results.boxes.data.tolist():
-        bx1,by1, bx2, by2, bscore, bclassid = detection
-
-        return brand[int(bclassid)]
-
-    return ""
-        
-def color_reconigse(image, model,device):
-    """Vehicle colour recognition
-
-    Args:
-        image (_type_): img input cv2 format
-        model (_type_): the cnn - googlenet model (colour)
-        device (_type_): device gpu info
-
-    Returns:
-        int: result
-    """
-    # Preprocess the image
-    transform = transforms.Compose([
-        transforms.Resize(256),
-        transforms.CenterCrop(224),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ])
-    
-    pil_image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-    
-    image = transform(pil_image).unsqueeze(0)  # Add batch dimension
-
-    # Move the image to the appropriate device
-    image = image.to(device)
-
-    # Set the model to evaluation mode and make prediction
-    model.eval()
-    with torch.no_grad():
-        outputs = model(image)
-        _, predicted = torch.max(outputs, 1)
-
-    return predicted.item()
-
-def insert_table_info(table,data,image_path,invalid=False,message="",vehicle_onwer=""):
-    """Insert data to gui
-
-    Args:
-        table (_type_): class of gui
-        data (array): value to insert
-        image_path (str): img path
-        invalid (bool, optional): write in illegal table or not. Defaults to False.
-        message (str, optional): illegal messahe. Defaults to "".
-        vehicle_onwer (str, optional): onwer name. Defaults to "".
+        table (_type_): GUI class
+        data (dictionary): contain all the result data
+        invalid (bool, optional): insert to warnning table or not. Defaults to False.
     """
     if invalid : choice = table.table_warnning 
     else : choice = table.table_info
@@ -296,7 +131,7 @@ def insert_table_info(table,data,image_path,invalid=False,message="",vehicle_onw
     
     #insert image
     item = QTableWidgetItem()
-    pixmap = QPixmap(image_path).scaled(200, 200)  # Resize the image
+    pixmap = QPixmap(data['img_path']).scaled(200, 200)  # Resize the image
     icon = QIcon(pixmap)
     item.setIcon(icon)
 
@@ -311,57 +146,56 @@ def insert_table_info(table,data,image_path,invalid=False,message="",vehicle_onw
     choice.setRowHeight(row_count, 210)
     choice.setColumnWidth(0, 210)
     
-    choice.setItem(row_count, 1, QTableWidgetItem(data[0]))
-    choice.setItem(row_count, 2, QTableWidgetItem(data[1]))
-    choice.setItem(row_count, 3, QTableWidgetItem(data[2]))
-    choice.setItem(row_count, 4, QTableWidgetItem(data[3]))
+    choice.setItem(row_count, 1, QTableWidgetItem(data['license_plate'])) # column display license plate
+    choice.setItem(row_count, 2, QTableWidgetItem(data['type'])) # column display vehicle type
+    choice.setItem(row_count, 3, QTableWidgetItem(data['brand'])) # column display vehicle brand
+    choice.setItem(row_count, 4, QTableWidgetItem(data['colour'])) # column display vehicle colour
     
     if invalid:
-        label= QLabel(message)
+        # column display warnning message
+        label= QLabel(data['warnning_message'])
         label.setTextFormat(Qt.RichText)  
         label.setAutoFillBackground(False)
         label.setStyleSheet("background-color: red;") 
         choice.setCellWidget(row_count, 5, label) 
         
-        choice.setItem(row_count, 6, QTableWidgetItem(vehicle_onwer))
-        
-                                
-def check_invalid_vehicle(result_data,path):
+        choice.setItem(row_count, 6, QTableWidgetItem(data['owner_name']))# column display onwer of vehicle
+                                     
+def check_invalid_vehicle(data,path):
     """check the illegal vehicle and return any warnning message
 
     Args:
-        result_data (array): value
+         data (dictionary): contain all the result data
         path (str): the database csv path
 
     Returns:
         bool: any illegal vehicle
-        str: illegal message
-        str: the vehicle onwer name
+        list: result_data
     """
     #default
     found_lp = False
-    onwer_name = ""
-    w_message = ""
     
     #open the database file
     with open(path, 'r', newline='') as csvfile:
         reader = csv.reader(csvfile)
         for col in reader:
             
-            if col[2] == result_data[0]: # true in vehicle plate 
+            if col[2] == data['license_plate']: # true in vehicle plate 
                 found_lp = True
-                onwer_name = col[1]
+                
+                data['onwer_name'] = col[1] #get the onwer name
+                
                 #type
-                if col[3] != result_data[1]: 
-                    w_message +=f"<p>Invalid vehicle Type for this License Plate, the register type is <b>{col[3]}</b>.</p>"
+                if col[3] != data['type']: 
+                    data['warnning_message'] +=f"<p>Invalid vehicle Type for this License Plate, the register type is <b>{col[3]}</b>.</p>"
                 
                 #brand
-                if col[4] != result_data[2]: 
-                    w_message +=f"<p>Invalid vehicle brand for this License Plate, the register brand is <b>{col[4]}</b>.</p>"
+                if col[4] != data['brand']: 
+                    data['warnning_message'] +=f"<p>Invalid vehicle brand for this License Plate, the register brand is <b>{col[4]}</b>.</p>"
                 
                 #color
-                if col[5] != result_data[3]: 
-                    w_message += f"<p>Invalid vehicle colour for this License Plate, the register colour is <b>{col[5]}</b>.</p>"
+                if col[5] != data['colour']: 
+                    data['warnning_message'] += f"<p>Invalid vehicle colour for this License Plate, the register colour is <b>{col[5]}</b>.</p>"
                     
                 #exp lp
                 date_now = datetime.today()
@@ -369,22 +203,22 @@ def check_invalid_vehicle(result_data,path):
                 between_date = date_exp - date_now
                 
                 if  between_date.days < 0: 
-                    w_message += f"<p>The road tax is expired, it expired <b>{-between_date.days}</b> days ago.</p>"
+                    data['warnning_message'] += f"<p>The road tax is expired, it expired <b>{-between_date.days}</b> days ago.</p>"
                     
                 #warnning messege
                 if col[7] != "": 
-                    w_message += f"<p>This vehicle is <b>{col[7]}</b>.</p>"
+                    data['warnning_message'] += f"<p>This vehicle is <b>{col[7]}</b>.</p>"
                     
                 break
         
-        if found_lp and w_message == "":
-            return False,"No error found.",onwer_name
-        elif found_lp and not w_message=="":
-            return True,w_message,onwer_name
+        if found_lp and data['warnning_message'] == "":
+            return False,data
+        elif found_lp and not data['warnning_message']=="":
+            return True,data
         else : 
-            return True,"This License Plate not register in the system.",onwer_name
+            data['warnning_message'] = "This License Plate not register in the system."
+            return True,data['warnning_message']
             
-
 class Load_Object():
     """Load the nessasry item
     """
@@ -414,7 +248,10 @@ class Load_Object():
 
         model_path = f'{utils_basedir}/model/colour.pth'
         color_model.load_state_dict(torch.load(model_path))
-        load.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        
+        if torch.cuda.is_available(): load.device = torch.device('cuda')
+        else : load.device = torch.device('cpu')
+        
         color_model = color_model.to(load.device)
         color_model.eval()  # Set the model to evaluation mode
         
@@ -427,16 +264,12 @@ class Load_Object():
         print("\nSuccessfully load reader model")
         
         
-        load.vehicles = {2:"car",5:'bus', 7:'truck'} # 2: 'car' ,3: 'motorcycle', 5: 'bus', 7: 'truck'
-        print("\n Successfully load vehicle : ",load.vehicles)
+        #load.vehicles = {2:"car",5:'bus', 7:'truck'} # 2: 'car' ,3: 'motorcycle', 5: 'bus', 7: 'truck'
+        #print("\n Successfully load vehicle : ",load.vehicles)
         
         #brand define
-        load.brand= ['Audi', 'Chrysler', 'Citroen', 'GMC', 'Honda', 'Hyundai', 'Infiniti', 'Mazda', 'Mercedes', 'Mercury', 'Mitsubishi', 'Nissan', 'Renault', 'Toyota', 'Volkswagen', 'acura', 'bmw', 'cadillac', 'chevrolet', 'dodge', 'ford', 'jeep', 'kia', 'lexus', 'lincoln', 'mini', 'porsche', 'ram', 'range rover', 'skoda', 'subaru', 'suzuki', 'volvo','Proton','Perodua','no class']
-        print("\nSuccessfully load brand class : ",load.brand)
-        
-        #colour classes
-        load.colour_class = ['beige','black','blue','brown','gold','green','grey','orange','pink','purple','red','silver','tan','white','yellow']
-        print("\nSuccessfully load colour class : ",load.colour_class)
+        #load.brand= ['Audi', 'Chrysler', 'Citroen', 'GMC', 'Honda', 'Hyundai', 'Infiniti', 'Mazda', 'Mercedes', 'Mercury', 'Mitsubishi', 'Nissan', 'Renault', 'Toyota', 'Volkswagen', 'acura', 'bmw', 'cadillac', 'chevrolet', 'dodge', 'ford', 'jeep', 'kia', 'lexus', 'lincoln', 'mini', 'porsche', 'ram', 'range rover', 'skoda', 'subaru', 'suzuki', 'volvo','Proton','Perodua','no class']
+        #print("\nSuccessfully load brand class : ",load.brand)
         
         load.database_path = f'{utils_basedir}/database.csv'
         print("\nSuccessfully load Database path : ",load.database_path)
@@ -490,30 +323,179 @@ class Detection(QObject):
         #create csv file
         load.csv_file_path = create_csv(load.new_folder_path)
     
-    def vehicle_illegal_detection(load):
-        """run for the vehicle detection which include the vehicle type,brand and color
+    def text_reader(load,img):
+    
+        #define the pattern
+        pattern =r'^[a-zA-Z][a-zA-Z0-9]*[0-9][a-zA-Z0-9]*$'
+        
+        #read the text
+        text_result =load.reader.readtext(img)              
+        #if non of the result showing out  
+        
+        if text_result:          
+            total_score =0
+            lp_text = "" 
+                
+            #combine the text
+            for (bbox, text, score) in text_result:
+                lp_text += text
+                total_score += score
+                                            
+            avg_lp_score = total_score/len(text_result)
+            
+            lp_text = lp_text.upper().replace(' ', '')
+        
+            #continue when the pattern is correct.
+            if re.match(pattern, lp_text) and avg_lp_score>=0.8:
+                #lp_text = correct_ocr_errors(lp_text)
+                return True,lp_text
+        
+        return False,""    
+                    
+    def search_vehicle(load,frame,plate):
+        
+        vehicle_detect =""
+        car_results = load.vehicel_model(frame,classes=[2,3,5,7])[0]
+        
+        for detection in car_results.boxes.data.tolist():
+            cx1,cy1, cx2, cy2, pscore, classid = detection 
+            if classid == 3:
+                break
+            
+            if plate[0] >= cx1 and plate[1] >= cy1 and plate[2] <= cx2 and plate[3] <= cy2:
+                print(classid)
+                vehicle_detect = [cx1,cy1, cx2, cy2, classid]
+                break
+                
+        return vehicle_detect
+
+    def search_plate(load,frame):
+
+        plate_detect = []
+        
+        car_plate_results = load.plate_detection(frame)[0]                   
+        for detection in car_plate_results.boxes.data.tolist():
+            px1,py1, px2, py2, pscore, classid = detection                       
+                            
+            if True:#pscore >= 0.3 :
+                            
+                lp_crop = frame[int(py1):int(py2), int(px1): int(px2)]    
+
+                reader_result,result = load.text_reader(lp_crop)
+                
+                if reader_result:
+                    if load.get_the_most_frequent(result):
+                        plate_detect.append([px1,py1,px2,py2,result])
+                        
+        return plate_detect
+
+    def get_the_most_frequent(load,result):
+        
+        load.lp_5_most.append(result)
+        
+        if len(load.lp_5_most) < 5:
+            return False
+        # Count frequencies of elements
+        freq = defaultdict(int)
+        
+        for elem in load.lp_5_most:
+            freq[elem] += 1
+
+        # Find the element with the highest frequency
+        max_freq_elem = max(freq, key=freq.get)
+        max_freq = freq[max_freq_elem]
+        
+        same_lp = False
+        for plate_no in load.save_plate:
+            if max_freq_elem == plate_no:
+                same_lp = True
+                break
+        
+        if not same_lp : 
+            return True
+
+    def search_brand(load,frame):
+        """Function to detact vehicle brand based on the given input
+
+        Args:
+            load (_type_): _description_
+            frame (_type_): input
+
+        Returns:
+            str: brand name
+        """
+
+        brand_detaction_results = load.brand_detection(frame)[0]
+
+        for detection in brand_detaction_results.boxes.data.tolist():
+            bx1,by1, bx2, by2, bscore, bclassid = detection
+
+            return load.brand_detection.names[int(bclassid)]
+
+        return "Error"
+            
+    def color_reconigse(load,frame):
+        """Function to detect the vehicle colour
+
+        Args:
+            load (_type_): _description_
+            frame (_type_): input
+
+        Returns:
+            str: colour
+        """
+        
+        colour_class = ['beige','black','blue','brown','gold','green','grey','orange','pink','purple','red','silver','tan','white','yellow']
+        
+        # Preprocess the image
+        transform = transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+        
+        pil_image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        
+        image = transform(pil_image).unsqueeze(0)  # Add batch dimension
+
+        # Move the image to the appropriate device
+        image = image.to(load.device)
+
+        # Set the model to evaluation mode and make prediction
+        load.model.eval()
+        with torch.no_grad():
+            outputs = load.model(image)
+            _, predicted = torch.max(outputs, 1)
+
+        return colour_class[predicted.item()]
+
+    def vehicle_illegal_detection(load,frame):
+        """Function to call and run detection and prediction for the vehicle license plate,vehicle type,vehicle brand and vehicle colour.
+        It also will call the function to determine the prediction data compare with the database given.
+        It will showing the output as the gui and save the crop vehicle to the folder that create.
+        Beside it also saving the result to the csv file for further view.
             
         Args:
             load (_type_): _description_
+            frame(_type_): input
 
-        Returns:
-            _type_: new image
         """
         
-        new_frame = load.frame.copy()
-        display_img(load.gui,new_frame)
+        display_img(load.gui,frame) # display the image
             
-        plate_detect = search_plate(load.frame,load.plate_detection,load.reader,load.save_plate)
+        plate_detect = load.search_plate(frame) #detect the LP
         
-        if len(plate_detect) > 0:
+        if len(plate_detect) > 0: #continue when any return value from the search_plate function
             
             for plate in plate_detect:
                 
-                load.save_plate.append(plate[4])
+                load.save_plate.append(plate[4]) #save the lp
                 
-                vehicle_detect = search_vehicle(load.frame,load.vehicel_model,plate)
+                vehicle_detect = load.search_vehicle(frame,plate) #search for the vehicle base on the LP
 
                 if not vehicle_detect == "":
+                    #load the position
                     x1 = vehicle_detect[0]
                     y1 = vehicle_detect[1]
                     
@@ -521,43 +503,48 @@ class Detection(QObject):
                     y2 = vehicle_detect[3]
                     
                     #crop the vehicle        
-                    vehicle_crop = load.frame[int(y1):int(y2), int(x1): int(x2)]
+                    vehicle_crop = frame[int(y1):int(y2), int(x1): int(x2)]
                     
                     #detect the brand
-                    detect_brand = search_brand(load.brand_detection,load.brand,vehicle_crop)  
+                    detect_brand = load.search_brand(frame)  
                     
                     #detect vehicle colour           
-                    detect_colour = load.colour_class[color_reconigse(vehicle_crop,load.color_model,load.device)]
+                    detect_colour = load.color_reconigse(frame)
                     
-                    result_data = [plate[4],load.vehicles[int(vehicle_detect[4])],detect_brand,detect_colour]  
-                    
-                    load.total_vehicle += 1 
-                                
                     #save crop image path
                     img_path = f'{load.new_folder_path}/crop/{plate[4]}.jpg'
-                                
+                    
+                    #combine result
+                    result_data = {
+                        'no':len(load.save_plate),
+                        'license_plate':plate[4],
+                        "type":vehicle_detect[4],
+                        "brand":detect_brand,
+                        "colour":detect_colour,
+                        "warnning_message":"",
+                        "owner_name":"",
+                        "owner_contact":"",
+                        "img_path":img_path
+                        }
+                            
                     #save the image with the lp name.                                        
                     cv2.imwrite(img_path, vehicle_crop)  
                                 
-                    insert_table_info(load.gui,result_data,img_path)
+                    insert_table_info(load.gui,result_data) # adding result to the gui
                                     
                     #check the illger vehicle and return warnning message if illger
-                    invalid,message,vehicle_onwer = check_invalid_vehicle(result_data,load.database_path)
+                    invalid,result_data = check_invalid_vehicle(result_data,load.database_path)
                                     
                     if invalid:
-                        insert_table_info(load.gui,result_data,img_path,invalid,message,vehicle_onwer)
+                        insert_table_info(load.gui,result_data,invalid)
                         load.total_warnning +=1
                                     
                     #insert data to the csv file
-                    insert_csv(len(load.save_plate),result_data,load.csv_file_path,message)
+                    insert_csv(load.csv_file_path,result_data)
                                 
                     QApplication.processEvents() 
                     #drawbox(new_frame,int(vehicle[0]),int(vehicle[2]),int(vehicle[1]),int(vehicle[3]),f'{plate[4]}',(255, 0, 0), 5) 
-                                              
-                                
-        load.gui.runing_text.setText(f"Loading. \n Total {load.total_vehicle} vehicle detacted and \n{load.total_warnning} is detacted as illegel vehicle.")    
-        return new_frame 
-                                               
+                                                                                                                         
     @Slot()
     def video_detaction(load):
         """This is the video detection function.It will get the input and covert the video to frame. Each frame will be call the run_detection to get the detection.
@@ -577,13 +564,14 @@ class Detection(QObject):
         #open video
         cap = cv2.VideoCapture(load.detact_input)
         cap.set(cv2.CAP_PROP_FPS, 30)
+        
         # Get the video frame width and height
-        frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        #frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        #frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
         # Define the codec and create VideoWriter object 
-        fourcc = cv2.VideoWriter_fourcc(*'XVID') 
-        out = cv2.VideoWriter(f'{load.new_folder_path}/result_video.avi', fourcc, 25.0, (frame_width, frame_height))
+        #fourcc = cv2.VideoWriter_fourcc(*'XVID') 
+        #out = cv2.VideoWriter(f'{load.new_folder_path}/result_video.avi', fourcc, 25.0, (frame_width, frame_height))
         
         load.save_plate = []    
         # Loop through the video frames
@@ -595,30 +583,30 @@ class Detection(QObject):
                 break
             
             # Read a frame from the video
-            success, load.frame = cap.read()
+            success, frame = cap.read()
 
             if success:
                 
-                new_frame = load.vehicle_illegal_detection() #call the function and return the new_version_frame
+                load.vehicle_illegal_detection(frame) #call the function and return the new_version_frame
+                load.gui.runing_text.setText(f"Loading. \n Total {len(load.save_plate)} vehicle detacted and \n{load.total_warnning} is detacted as illegel vehicle.")    
                                                      
-                out.write(new_frame)# add the frame to the video.
-                
+                #out.write(new_frame)# add the frame to the video.
             else:
                 # Break the loop if the end of the video is reached
                 break
         
         # Release the video capture object and close the display window
         cap.release()
-        out.release() 
+        #out.release() 
         
         
         # Calculate the elapsed time
         running_time =time.time()- start_time
 
-        print(f"Total {load.total_vehicle} vehicle detacted and {load.total_warnning} is detacted as illegel vehicle")
+        print(f"Total {len(load.save_plate)} vehicle detacted and {load.total_warnning} is detacted as illegel vehicle")
         print("\nProgram running time:", running_time/60, "minutes")
         
-        load.gui.runing_text.setText(f"detection End. \n Total {load.total_vehicle} vehicle detacted and \n{load.total_warnning} is detacted as illegel vehicle \nTime Taken : {round(running_time/60 , 2)} minutes")
+        load.gui.runing_text.setText(f"End,Total {len(load.save_plate)} vehicle detacted and \n{load.total_warnning} is detacted as illegel vehicle \nTime Taken : {round(running_time/60 , 2)} minutes")
         load.gui.text_container.setStyleSheet("background-color:lightgreen;")
         load.gui.result_home_btn.setEnabled(True)
         load.gui.stop_running_btn.setEnabled(False)
@@ -639,8 +627,8 @@ class Detection(QObject):
         #get the file path and csv path
         load.open_folder_csv()
         
-        load.frame = cv2.imread(load.detact_input)
-        cv2.imwrite(f'{load.new_folder_path}/original.png', load.frame)
+        frame = cv2.imread(load.detact_input)
+        cv2.imwrite(f'{load.new_folder_path}/original.png', frame)
         load.save_plate = []  
         load.vehicle_illegal_detection()
         
@@ -698,7 +686,7 @@ class Detection(QObject):
                     break
             
                 # Capture frame-by-frame
-                ret, load.frame = cap.read()
+                ret, frame = cap.read()
 
                 if not ret:
                     print("Failed to grab frame")
