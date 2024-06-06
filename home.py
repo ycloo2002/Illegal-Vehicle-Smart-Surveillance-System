@@ -1,7 +1,7 @@
 import sys
 from utils.detact import Detection,Load_Object
 from PySide6.QtCore import QSize, Qt,Slot,QThread
-from PySide6.QtGui import QFont,QIcon,QPixmap,QColor,QPainter
+from PySide6.QtGui import QFont,QIcon,QPixmap
 from functools import partial
 from PySide6.QtWidgets import (
     QApplication,
@@ -34,7 +34,7 @@ except ImportError:
 basedir = os.path.dirname(__file__)
 
 FF = 'Verdana'
-VERSION = "Beta 3.5"
+VERSION = "Beta 2.0"
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -60,7 +60,7 @@ class MainWindow(QMainWindow):
         self.pervios_icon = f'{basedir}/utils/img/previous.png'
         
         self.setWindowTitle("Illegal Vehicle Smart Surveillance")
-        self.setStyleSheet("background-color: #add8e6;")
+        self.setStyleSheet("background-color: #e7feff;")
         
         # Create stacked widget to hold pages
         self.stacked_widget = QStackedWidget(self)
@@ -542,13 +542,20 @@ class MainWindow(QMainWindow):
                     self.history_details_table.setItem(row_count, 2, QTableWidgetItem(col[2]))
                     self.history_details_table.setItem(row_count, 3, QTableWidgetItem(col[3]))
                     self.history_details_table.setItem(row_count, 4, QTableWidgetItem(col[4]))
-                    self.history_details_table.setItem(row_count, 5, QTableWidgetItem(col[5]))
+                    
+                    label= QLabel(col[5])
+                    label.setTextFormat(Qt.RichText)  
+                    label.setAutoFillBackground(False)
                     
                     total_detact += 1
 
                     if col[5] == "No error found.":
                         total_no_illeger += 1
+                        label.setStyleSheet("background-color: lightgreen;") 
+                    else:
+                        label.setStyleSheet("background-color: red;") 
                         
+                    self.history_details_table.setCellWidget(row_count, 5, label)    
         total_illeger = total_detact - total_no_illeger -1
         
         row_count = self.history_details_table.rowCount()

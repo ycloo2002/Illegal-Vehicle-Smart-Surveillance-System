@@ -16,9 +16,10 @@ from PIL import Image
 from PySide6.QtWidgets import (
     QApplication,
     QTableWidgetItem,
+    QLabel
 )
 from PySide6.QtGui import QPixmap, QIcon,QImage
-from PySide6.QtCore import QObject,Slot,Signal, QMutex, QMutexLocker
+from PySide6.QtCore import QObject,Slot,Signal, QMutex, QMutexLocker,Qt
     
 def display_img(display,image):
     """display the image in the result page
@@ -316,8 +317,14 @@ def insert_table_info(table,data,image_path,invalid=False,message="",vehicle_onw
     choice.setItem(row_count, 4, QTableWidgetItem(data[3]))
     
     if invalid:
-        choice.setItem(row_count, 5, QTableWidgetItem(message))
+        label= QLabel(message)
+        label.setTextFormat(Qt.RichText)  
+        label.setAutoFillBackground(False)
+        label.setStyleSheet("background-color: red;") 
+        choice.setCellWidget(row_count, 5, label) 
+        
         choice.setItem(row_count, 6, QTableWidgetItem(vehicle_onwer))
+        
                                 
 def check_invalid_vehicle(result_data,path):
     """check the illegal vehicle and return any warnning message
@@ -332,50 +339,51 @@ def check_invalid_vehicle(result_data,path):
         str: the vehicle onwer name
     """
     #default
-    code = "notfound"
+    found_lp = False
     onwer_name = ""
-    a_typr = ""
-    a_brand = ""
-    a_color = ""
+    w_message = ""
+    
     #open the database file
     with open(path, 'r', newline='') as csvfile:
         reader = csv.reader(csvfile)
         for col in reader:
             
             if col[2] == result_data[0]: # true in vehicle plate 
-                code = "r"
+                found_lp = True
                 onwer_name = col[1]
                 #type
                 if col[3] != result_data[1]: 
-                    code += "T"
-                    a_typr = col[3]
+                    w_message +=f"<p>Invalid vehicle Type for this License Plate, the register type is <b>{col[3]}</b>.</p>"
                 
                 #brand
                 if col[4] != result_data[2]: 
-                    code += "B"
-                    a_brand = col[4]
+                    w_message +=f"<p>Invalid vehicle brand for this License Plate, the register brand is <b>{col[4]}</b>.</p>"
                 
                 #color
                 if col[5] != result_data[3]: 
-                    code += "C"
-                    a_color = col[5]
+                    w_message += f"<p>Invalid vehicle colour for this License Plate, the register colour is <b>{col[5]}</b>.</p>"
+                    
+                #exp lp
+                date_now = datetime.today()
+                date_exp = datetime.strptime(col[6], '%Y-%m-%d')
+                between_date = date_exp - date_now
                 
+                if  between_date.days < 0: 
+                    w_message += f"<p>The road tax is expired, it expired <b>{-between_date.days}</b> days ago.</p>"
+                    
+                #warnning messege
+                if col[7] != "": 
+                    w_message += f"<p>This vehicle is <b>{col[7]}</b>.</p>"
+                    
                 break
         
-        match code:
-            case "notfound" : return True,"This License Plate not register in the system.",onwer_name
+        if found_lp and w_message == "":
+            return False,"No error found.",onwer_name
+        elif found_lp and not w_message=="":
+            return True,w_message,onwer_name
+        else : 
+            return True,"This License Plate not register in the system.",onwer_name
             
-            case "rTBC" : return True,f"Invalid Vehicle Type, Brand and Colour for this License Plate.\nThe register type is '{a_typr}' ,brand is '{a_brand}' and colour is '{a_color}'",onwer_name
-            case "rTB" : return True,f"Invalid Vehicle Type, Brand and Colour for this License Plate. \nThe register type is '{a_typr}' and brand is '{a_brand}'",onwer_name
-            case "rTC" : return True,f"Invalid Vehicle Type and Colour for this License Plate. \nThe register type is '{a_typr}' and colour is '{a_color}'",onwer_name
-            case "rT" : return True,f"Invalid Vehicle Type for this License Plate. \nThe register colour is '{a_typr}'",onwer_name
-                
-            case "rB" : return True,f"Invalid Vehicle Brand for this License Plate. \nThe register brand is '{a_brand}'",onwer_name
-            case "rBC" : return True,f"Invalid Vehicle Brand and Colour for this License Plate. \nThe register brand is '{a_brand}' and colour is '{a_color}'",onwer_name
-                
-            case "rC" : return True,f"Invalid Vehicle Colour for this License Plate. \nThe register colour is '{a_color}'",onwer_name
-            
-            case "r" : return False,"No error found.",onwer_name
 
 class Load_Object():
     """Load the nessasry item
@@ -423,7 +431,7 @@ class Load_Object():
         print("\n Successfully load vehicle : ",load.vehicles)
         
         #brand define
-        load.brand= ['Audi', 'Chrysler', 'Citroen', 'GMC', 'Honda', 'Hyundai', 'Infiniti', 'Mazda', 'Mercedes', 'Mercury', 'Mitsubishi', 'Nissan', 'Renault', 'Toyota', 'Volkswagen', 'acura', 'bmw', 'cadillac', 'chevrolet', 'dodge', 'ford', 'jeep', 'kia', 'lexus', 'lincoln', 'mini', 'porsche', 'ram', 'range rover', 'skoda', 'subaru', 'suzuki', 'volvo','Proton','Perodua']
+        load.brand= ['Audi', 'Chrysler', 'Citroen', 'GMC', 'Honda', 'Hyundai', 'Infiniti', 'Mazda', 'Mercedes', 'Mercury', 'Mitsubishi', 'Nissan', 'Renault', 'Toyota', 'Volkswagen', 'acura', 'bmw', 'cadillac', 'chevrolet', 'dodge', 'ford', 'jeep', 'kia', 'lexus', 'lincoln', 'mini', 'porsche', 'ram', 'range rover', 'skoda', 'subaru', 'suzuki', 'volvo','Proton','Perodua','no class']
         print("\nSuccessfully load brand class : ",load.brand)
         
         #colour classes
@@ -568,7 +576,7 @@ class Detection(QObject):
         
         #open video
         cap = cv2.VideoCapture(load.detact_input)
-
+        cap.set(cv2.CAP_PROP_FPS, 30)
         # Get the video frame width and height
         frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
