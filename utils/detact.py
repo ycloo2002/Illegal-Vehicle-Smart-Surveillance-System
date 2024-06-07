@@ -152,6 +152,7 @@ def check_invalid_vehicle(data,path):
                     data['warnning_message'] += f"<p>Invalid vehicle colour for this License Plate, the register colour is <b>{col['Register_Vehicle_Colour']}</b>.</p>"
                     
                 #exp lp
+                print(col['Road_tax_exp_date'])
                 date_now = datetime.today()
                 date_exp = datetime.strptime(col['Road_tax_exp_date'], '%Y-%m-%d')
                 between_date = date_exp - date_now
@@ -425,7 +426,7 @@ class Detection(QObject):
 
         return colour_class[predicted]
     
-    def vehicle_illegal_detection(load,frame):
+    def vehicle_illegal_detection(load,frame,img=False):
         """Function to call and run detection and prediction for the vehicle license plate,vehicle type,vehicle brand and vehicle colour.
         It also will call the function to determine the prediction data compare with the database given.
         It will showing the output as the gui and save the crop vehicle to the folder that create.
@@ -434,7 +435,9 @@ class Detection(QObject):
         Args:
             load (_type_): _description_
             frame(_type_): input
-
+            img(bool):check detect image or not
+        return
+            int: skip frame
         """
         frame_skip = 0
         display_img(load.gui,frame) # display the image
@@ -444,7 +447,6 @@ class Detection(QObject):
         if len(plate_detect) > 0: #continue when any return value from the search_plate function
 
             for plate in plate_detect:
-                
                 
                 same_lp = False
                 for plate_no in load.save_plate:
@@ -479,7 +481,7 @@ class Detection(QObject):
                         load.lp_5_most.append(plate['lp'])
                         load.save_all_result.append(result_data)        
                                
-                if len(load.save_all_result) > 4 and not same_lp :
+                if (len(load.save_all_result) > 4 and not same_lp)or img:
                     lp = get_the_most_frequent(load.lp_5_most)
                     
                     for plate_no in load.save_plate:
@@ -617,9 +619,11 @@ class Detection(QObject):
         Args:
             load (_type_): _description_
         """
-        load.total_vehicle = 0  
         
+        load.save_plate = []   
         load.total_warnning = 0
+        load.lp_5_most = deque(maxlen=5)
+        load.save_all_result=deque(maxlen=5)
         
         start_time = time.time()
         #get the file path and csv path
@@ -627,19 +631,21 @@ class Detection(QObject):
         
         frame = cv2.imread(load.detact_input)
         cv2.imwrite(f'{load.new_folder_path}/original.png', frame)
+        
         load.save_plate = []  
-        load.vehicle_illegal_detection()
+        load.vehicle_illegal_detection(frame,img=True)
         
         end_time = time.time()
 
         # Calculate the elapsed time
         running_time = end_time - start_time
         
-        print(f"Total {load.total_vehicle} vehicle detacted and {load.total_warnning} is detacted as illegel vehicle")
+        print(f"Total {len(load.save_plate)} vehicle detacted and {load.total_warnning} is detacted as illegel vehicle")
         print("\nProgram running time:", running_time/60, "minutes")
         
-        load.gui.runing_text.setText(f"detection End. \n Total {load.total_vehicle} vehicle detacted and \n{load.total_warnning} is detacted as illegel vehicle \nTime Taken : {round(running_time/60 , 2)} minutes")
-        load.gui.text_container.setStyleSheet("background-color:lightgreen;")
+        load.gui.runing_text.setText(f"End,Total {len(load.save_plate)} vehicle detacted and \n{load.total_warnning} is detacted as illegel vehicle \nTime Taken : {round(running_time/60 , 2)} minutes")
+        load.gui.text_container.setStyleSheet("background-color:transparent;")
+        load.gui.runing_text.setStyleSheet("color:black")
         load.gui.result_home_btn.setEnabled(True)
         load.gui.stop_running_btn.setEnabled(False)
         load.finish.emit(load.folder_name)
@@ -653,21 +659,23 @@ class Detection(QObject):
         """
         #open video
         cap = cv2.VideoCapture(0)
+        cap.set(cv2.CAP_PROP_FPS, 30)
         load.save_plate = []  
         if not cap.isOpened():
             print("Error: Could not open video stream.")
             load.warnning.emit("Unable to open the camera")
             
         else:
-            load.total_vehicle = 0  
-        
+            load.save_plate = []   
             load.total_warnning = 0
-            
+            load.lp_5_most = deque(maxlen=5)
+            load.save_all_result=deque(maxlen=5)
+            skip_frame = 0 
+                
             start_time = time.time()
             
             #get the file path and csv path
             load.open_folder_csv()
-            
             
             # Get the video frame width and height
             frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -675,7 +683,7 @@ class Detection(QObject):
 
             # Define the codec and create VideoWriter object 
             fourcc = cv2.VideoWriter_fourcc(*'XVID') 
-            out = cv2.VideoWriter(f'{load.new_folder_path}/result_video.avi', fourcc, 25.0, (frame_width, frame_height))
+            out = cv2.VideoWriter(f'{load.new_folder_path}/result_video.avi', fourcc, 20.0, (frame_width, frame_height))
         
             while True:
                 QMutexLocker(load.mutex)  # Ensure thread-safe access to _is_running
@@ -688,15 +696,15 @@ class Detection(QObject):
 
                 if not ret:
                     print("Failed to grab frame")
+                    load.warnning.emit("Failed to grab frame")
                     break
                        
-                new_frame = load.vehicle_illegal_detection() #call the function and return the new_version_frame
-                                                                            
-                out.write(new_frame)# add the frame to the video.
-                
-                # Press 'q' on the keyboard to exit the loop
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    break
+                if skip_frame != 0: 
+                    skip_frame -= 1
+                else :
+                    skip_frame=load.vehicle_illegal_detection(frame) #call the function and return the new_version_frame
+                    load.gui.runing_text.setText(f"Loading. \n Total {len(load.save_plate)} vehicle detacted and \n{load.total_warnning} is detacted as illegel vehicle.")                                                                                                                 
+                    out.write(frame)# add the frame to the video.
                 
             # Release the video capture object and close the display window
             cap.release()
@@ -707,11 +715,12 @@ class Detection(QObject):
             # Calculate the elapsed time
             running_time = end_time - start_time
 
-            print(f"Total {load.total_vehicle} vehicle detacted and {load.total_warnning} is detacted as illegel vehicle")
+            print(f"Total {len(load.save_plate)} vehicle detacted and {load.total_warnning} is detacted as illegel vehicle")
             print("\nProgram running time:", running_time/60, "minutes")
             
-            load.gui.runing_text.setText(f"detection End. \n Total {load.total_vehicle} vehicle detacted and \n{load.total_warnning} is detacted as illegel vehicle \nTime Taken : {round(running_time/60 , 2)} minutes")
-            load.gui.text_container.setStyleSheet("background-color:lightgreen;")
+            load.gui.runing_text.setText(f"End,Total {len(load.save_plate)} vehicle detacted and \n{load.total_warnning} is detacted as illegel vehicle \nTime Taken : {round(running_time/60 , 2)} minutes")
+            load.gui.text_container.setStyleSheet("background-color:transparent;")
+            load.gui.runing_text.setStyleSheet("color:black")
             load.gui.result_home_btn.setEnabled(True)
             load.gui.stop_running_btn.setEnabled(False)
             load.finish.emit(load.folder_name)
