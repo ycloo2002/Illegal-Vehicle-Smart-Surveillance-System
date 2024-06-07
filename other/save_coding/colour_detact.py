@@ -8,7 +8,7 @@ import torchvision.models as models
 
 
 if __name__ == '__main__': 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    
     
    # Load the model for inference
     model = models.googlenet(pretrained=False, aux_logits=True)  # Set aux_logits to True to match the saved model
@@ -17,9 +17,9 @@ if __name__ == '__main__':
     model.aux1.fc2 = nn.Linear(model.aux1.fc2.in_features, 15)
     model.aux2.fc2 = nn.Linear(model.aux2.fc2.in_features, 15)
 
-    model_path = "colour.pth"
+    model_path = 'F:\\fyp_system\\utils\\model\\colour.pth'
     model.load_state_dict(torch.load(model_path))
-    model = model.to(device)
+    
     model.eval()  # Set the model to evaluation mode
     print("Model loaded and ready for inference")
 
@@ -35,7 +35,7 @@ if __name__ == '__main__':
         image = transform(image).unsqueeze(0)  # Add batch dimension
 
         # Move the image to the appropriate device
-        image = image.to(device)
+        
 
         # Set the model to evaluation mode and make prediction
         model.eval()
@@ -46,7 +46,7 @@ if __name__ == '__main__':
         return predicted.item()
 
     # Example usage
-    image_path = "F:/fyp_system/save/2024-05-16 21-45-58/VDH5862_.jpg"
+    image_path = "F:\\fyp_system\\result\\2024-06-07 15-24-53\\crop\\JSL4468.jpg"
     colour_class = ['beige','black','blue','brown','gold','green','grey','orange','pink','purple','red','silver','tan','white','yellow']
     class_index = predict(image_path, model)
     print(f'Predicted class index: {class_index}')

@@ -267,9 +267,9 @@ class MainWindow(QMainWindow):
         
         
         self.table_warnning = QTableWidget()
-        self.table_warnning.setColumnCount(7)
+        self.table_warnning.setColumnCount(8)
         self.table_warnning.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.table_warnning.setHorizontalHeaderLabels(['Vehicle_Image',"License_Plate","Vehicle_Type", "Vehicle_Brand",'Vehicle_Colour','Warning Message','Vehicle_Onwner'])
+        self.table_warnning.setHorizontalHeaderLabels(['Vehicle_Image',"License_Plate","Vehicle_Type", "Vehicle_Brand",'Vehicle_Colour','Warning Message','Vehicle_Owner','Owner_contact'])
         self.table_warnning.setAlternatingRowColors(True)
         self.table_warnning.setStyleSheet(self.table_setting)
         
@@ -416,9 +416,9 @@ class MainWindow(QMainWindow):
         self.layout_history_details.addWidget(self.label_history_details_table)
         
         self.history_details_table = QTableWidget()
-        self.history_details_table.setColumnCount(6)
+        self.history_details_table.setColumnCount(8)
         self.history_details_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.history_details_table.setHorizontalHeaderLabels(['Vehicle_Image',"License_Plate","Vehicle_Type", "Vehicle_Brand",'Vehicle_Colour','Warning Message'])
+        self.history_details_table.setHorizontalHeaderLabels(['Vehicle_Image',"License_Plate","Vehicle_Type", "Vehicle_Brand",'Vehicle_Colour','Warning Message','Owner_name','Owner_contact'])
         self.history_details_table.setAlternatingRowColors(True)
         self.history_details_table.setStyleSheet(self.table_setting)
         
@@ -462,10 +462,10 @@ class MainWindow(QMainWindow):
                     total_no_illeger=-1
                     folder_name = os.path.basename(folder)
                     with open(f'{folder}/result.csv', 'r', newline='') as csvfile:
-                        reader = csv.reader(csvfile)
+                        reader = csv.DictReader(csvfile)
                         for row in reader:
                             total_detact += 1
-                            if row[5] == "No error found.":
+                            if row['warnning_message'] == "":
                                 total_no_illeger += 1
                                 
                     total_illeger = total_detact - total_no_illeger -1
@@ -544,15 +544,15 @@ class MainWindow(QMainWindow):
                 label= QLabel(col["warnning_message"])
                 label.setTextFormat(Qt.RichText)  
                 label.setAutoFillBackground(False)
-                if col[5] == "":
+                if col['warnning_message'] == "":
                     total_no_illeger += 1
                     label.setStyleSheet("background-color: lightgreen;") 
                 else:
                     label.setStyleSheet("background-color: red;") 
                 self.history_details_table.setCellWidget(row_count, 5, label)  
                 
-                self.history_details_table.setItem(row_count, 3, QTableWidgetItem(col["owner_name"]))
-                self.history_details_table.setItem(row_count, 4, QTableWidgetItem(col["owner_contact"]))
+                self.history_details_table.setItem(row_count, 6, QTableWidgetItem(col["owner_name"]))
+                self.history_details_table.setItem(row_count, 7, QTableWidgetItem(col["owner_contact"]))
                 
                 total_detact += 1
                   
@@ -610,6 +610,12 @@ class MainWindow(QMainWindow):
         self.text_container.setStyleSheet("background-color:red;")
         QApplication.processEvents() 
         
+        self.table_warnning.clearContents()  # Clear the cell contents
+        self.table_warnning.setRowCount(0)
+                    
+        self.table_info.clearContents()  # Clear the cell contents
+        self.table_info.setRowCount(0)
+                    
         self.stacked_widget.setCurrentIndex(2)
         
         self.run_detaction = Detection(self,"")
@@ -621,6 +627,8 @@ class MainWindow(QMainWindow):
         self.worker_thread.start()
         
         self.run_detaction.warnning.connect(self.warnning_popout)
+        self.run_detaction.insert_data.connect(self.insert_table_info)  
+        self.run_detaction.pop_illegal.connect(self.detact_illegal)  
         self.run_detaction.finish.connect(self.detact_finish)  
                    
     def input_video_img(self):
@@ -644,18 +652,32 @@ class MainWindow(QMainWindow):
                 # Check if selected file is an image or a video
                 if any(lower_file_path.endswith(ext) for ext in (".png", ".jpg", ".jpeg", ".bmp", ".gif")):
                     print("Image file path",file_path)
+                    self.table_warnning.clearContents()  # Clear the cell contents
+                    self.table_warnning.setRowCount(0)
+                    
+                    self.table_info.clearContents()  # Clear the cell contents
+                    self.table_info.setRowCount(0)
+                    
                     self.stacked_widget.setCurrentIndex(2)
 
                     self.run_detaction = Detection(self,file_path)
                     self.worker_thread = QThread()
                     
                     self.run_detaction.moveToThread(self.worker_thread)
-                    self.worker_thread.started.connect(self.run_detaction.image_detaction) 
+                    self.worker_thread.started.connect(self.run_detaction.image_detaction)
+                    self.run_detaction.insert_data.connect(self.insert_table_info)  
+                    self.run_detaction.pop_illegal.connect(self.detact_illegal)   
                     self.run_detaction.finish.connect(self.detact_finish)     
                     self.worker_thread.start()
                     
                 elif any(lower_file_path.endswith(ext) for ext in (".mp4", ".avi", ".mov")):
                     print(file_path)
+                    self.table_warnning.clearContents()  # Clear the cell contents
+                    self.table_warnning.setRowCount(0)
+                    
+                    self.table_info.clearContents()  # Clear the cell contents
+                    self.table_info.setRowCount(0)
+                    
                     self.stacked_widget.setCurrentIndex(2)
 
                     self.run_detaction = Detection(self,file_path)
@@ -664,8 +686,11 @@ class MainWindow(QMainWindow):
                     self.run_detaction.moveToThread(self.worker_thread)
                     self.worker_thread.started.connect(self.run_detaction.video_detaction)
                     self.run_detaction.insert_data.connect(self.insert_table_info)  
+                    self.run_detaction.pop_illegal.connect(self.detact_illegal)  
                     self.run_detaction.finish.connect(self.detact_finish)  
                     self.worker_thread.start()
+                    
+                    
                 else:
                     print("Unsupported file format.")
                     self.warnning_popout("Unsupported file format.")
@@ -675,6 +700,7 @@ class MainWindow(QMainWindow):
         The function to stop the task and change the button enable at the result page. When the stop button click, the return home button will be enable and the stop button will be diable
         """
         self.run_detaction.stop()  # Signal the worker to stop
+        self.close_thread()
         self.result_home_btn.setEnabled(True)
         self.stop_running_btn.setEnabled(False)
     
@@ -697,7 +723,33 @@ class MainWindow(QMainWindow):
 
         if self.worker_thread.isRunning():                   
             self.close_thread()            
-                    
+    
+    @Slot(str)
+    def detact_illegal(self,message):
+        """alert the user with detect as illegal vehicle
+
+        Args:
+            message (str): the warnning message
+        """
+        
+        html_text = """
+                    <html>
+                    <head>
+                    </head>
+                    <body>
+                    <h2>Illegal vehicle found !!!</h2>
+                    """+message+"""
+                    </body>
+                    </html>
+        """
+
+        msg_box = QMessageBox()
+        msg_box.setIcon(QMessageBox.Information)
+        msg_box.setText(html_text)
+        msg_box.setWindowTitle("Illegal vehicle found !!!")
+        msg_box.setStandardButtons(QMessageBox.Ok)
+        msg_box.exec() 
+                        
     @Slot(str)
     def detact_finish(self,folder_name):
         """pop out the information message box to tell the user the detection is end and tell when the result is save.
@@ -762,6 +814,7 @@ class MainWindow(QMainWindow):
             choice.setCellWidget(row_count, 5, warnning_message) 
             
             choice.setItem(row_count, 6, QTableWidgetItem(data['owner_name']))# column display onwer of vehicle
+            choice.setItem(row_count, 7, QTableWidgetItem(data['owner_contact']))# column display onwer of vehicle
                 
     def close_thread(self):
         """function to close the thread
@@ -820,7 +873,7 @@ if __name__ == "__main__":
             log_file.write(f"An error occurred: {str(e)}\n")
         sys.exit(1)
         
-"""
+    """
     #for apllication use. Delete the above and class tee, then uncomment this 
     try:
         # Redirect stdout and stderr to a file
@@ -847,4 +900,4 @@ if __name__ == "__main__":
             log_file.write(f"An error occurred: {str(e)}\n")
         sys.exit(1)   
         
-"""
+    """
