@@ -40,7 +40,7 @@ def display_img(display,image):
     #set the image to the gui
     display.label_img.setPixmap(pixmap)
 
-def drawbox(img,x1,x2,y1,y2,label_text,color = (255, 0, 0),thickness = 5):
+def drawbox(img,x1,x2,y1,y2,label_text="",color = (255, 0, 0),thickness = 5):
     """draw the rectangle box to the image with label
 
     Args:
@@ -49,7 +49,7 @@ def drawbox(img,x1,x2,y1,y2,label_text,color = (255, 0, 0),thickness = 5):
         x2 (int): x2 location
         y1 (int): y1 location
         y2 (int): y2 location
-        label_text (str): the label
+        label_text (str): the label. Defaults to "".
         color (tuple, optional): color of the line . Defaults to (255, 0, 0).
         thickness (int, optional): the thickness of line . Defaults to 5.
     """
@@ -60,20 +60,21 @@ def drawbox(img,x1,x2,y1,y2,label_text,color = (255, 0, 0),thickness = 5):
     # Draw the rectangle on the image
     cv2.rectangle(img, start_point, end_point, color, thickness)
     
-    # Add the label text to the image
-    font = cv2.FONT_HERSHEY_SIMPLEX
-    font_scale = 1
-    font_color = (0,0,0) #black
-    (label_width, label_height), _ = cv2.getTextSize(label_text, font, font_scale,thickness)
-    label_position = (start_point[0], start_point[1] - 5) 
+    if label_text != "":
+        # Add the label text to the image
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 1
+        font_color = (0,0,0) #black
+        (label_width, label_height), _ = cv2.getTextSize(label_text, font, font_scale,thickness)
+        label_position = (start_point[0], start_point[1] - 5) 
+        
+        #draw the rectangle
+        start_point = label_position
+        end_point = (label_position[0] + label_width, label_position[1] - label_height)
+        cv2.rectangle(img, start_point, end_point, color, thickness=cv2.FILLED)
     
-    #draw the rectangle
-    start_point = label_position
-    end_point = (label_position[0] + label_width, label_position[1] - label_height)
-    cv2.rectangle(img, start_point, end_point, color, thickness=cv2.FILLED)
-
-    #putting the label text
-    cv2.putText(img, label_text, label_position, font, font_scale, font_color, thickness=5)
+        #putting the label text
+        cv2.putText(img, label_text, label_position, font, font_scale, font_color, thickness=5)
 
 def data_and_time():
     """get the date and time as the '%Y-%m-%d %H-%M-%S' format
@@ -438,9 +439,10 @@ class Detection(QObject):
             img(bool):check detect image or not
         return
             int: skip frame
+            _type_ : new plotting frame
         """
         frame_skip = 0
-        display_img(load.gui,frame) # display the image
+        new_frame = frame.copy()
             
         plate_detect = load.search_plate(frame) #detect the LP
         
@@ -475,9 +477,14 @@ class Detection(QObject):
                             "type":vehicle_detect['type'],
                             "brand":detect_brand,
                             "colour":detect_colour,
-                            "vehicle_crop":vehicle_crop
+                            "vehicle_crop":vehicle_crop,
+                            "x1":int(vehicle_detect['x1']),
+                            "y1":int(vehicle_detect['y1']),
+                            "x2":int(vehicle_detect['x2']),
+                            "y2":int(vehicle_detect['y2'])
                             }
                         
+                        drawbox(new_frame,result_data['x1'],result_data['x2'],result_data['y1'],result_data['y2'],color = (255, 0, 0))
                         load.lp_5_most.append(plate['lp'])
                         load.save_all_result.append(result_data)        
                                
@@ -540,7 +547,8 @@ class Detection(QObject):
         
         else: frame_skip = 5
         
-        return frame_skip
+        display_img(load.gui,new_frame) # display the image
+        return frame_skip,new_frame
     
     @Slot()
     def video_detaction(load):
@@ -559,13 +567,13 @@ class Detection(QObject):
         cap = cv2.VideoCapture(load.detact_input)
         cap.set(cv2.CAP_PROP_FPS, 30)
         
-        # Get the video frame width and height
-        #frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        #frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        #Get the video frame width and height
+        frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
         # Define the codec and create VideoWriter object 
-        #fourcc = cv2.VideoWriter_fourcc(*'XVID') 
-        #out = cv2.VideoWriter(f'{load.new_folder_path}/result_video.avi', fourcc, 25.0, (frame_width, frame_height))
+        fourcc = cv2.VideoWriter_fourcc(*'XVID') 
+        out = cv2.VideoWriter(f'{load.new_folder_path}/result_video.avi', fourcc, 20.0, (frame_width, frame_height))
         
         load.save_plate = []   
         load.total_warnning = 0
@@ -587,16 +595,16 @@ class Detection(QObject):
                 if skip_frame != 0: 
                     skip_frame -= 1
                 else :
-                    skip_frame=load.vehicle_illegal_detection(frame) #call the function and return the new_version_frame
+                    skip_frame,new_frame=load.vehicle_illegal_detection(frame) #call the function and return the new_version_frame
                     load.gui.runing_text.setText(f"Loading. \n Total {len(load.save_plate)} vehicle detacted and \n{load.total_warnning} is detacted as illegel vehicle.")                                     
-                #out.write(new_frame)# add the frame to the video.
+                    out.write(new_frame)
             else:
                 # Break the loop if the end of the video is reached
                 break
         
         # Release the video capture object and close the display window
         cap.release()
-        #out.release() 
+        out.release() 
         
         
         # Calculate the elapsed time
@@ -630,11 +638,11 @@ class Detection(QObject):
         load.open_folder_csv()
         
         frame = cv2.imread(load.detact_input)
-        cv2.imwrite(f'{load.new_folder_path}/original.png', frame)
+        
         
         load.save_plate = []  
-        load.vehicle_illegal_detection(frame,img=True)
-        
+        _,new_frame = load.vehicle_illegal_detection(frame,img=True)
+        cv2.imwrite(f'{load.new_folder_path}/result.png', new_frame)
         end_time = time.time()
 
         # Calculate the elapsed time
@@ -702,9 +710,9 @@ class Detection(QObject):
                 if skip_frame != 0: 
                     skip_frame -= 1
                 else :
-                    skip_frame=load.vehicle_illegal_detection(frame) #call the function and return the new_version_frame
+                    skip_frame,new_frame=load.vehicle_illegal_detection(frame) #call the function and return the new_version_frame
                     load.gui.runing_text.setText(f"Loading. \n Total {len(load.save_plate)} vehicle detacted and \n{load.total_warnning} is detacted as illegel vehicle.")                                                                                                                 
-                    out.write(frame)# add the frame to the video.
+                    out.write(new_frame)# add the frame to the video.
                 
             # Release the video capture object and close the display window
             cap.release()
