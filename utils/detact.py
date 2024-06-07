@@ -138,8 +138,9 @@ def check_invalid_vehicle(data,path):
             if col['Licence_Plate_Number'] == data['license_plate']: # true in vehicle plate 
                 found_lp = True
                 
-                data['onwer_name'] = col['Vehicle_owner'] #get the owner name
-                data['onwer_contact'] = col['Contact_number'] #get the owner name
+                data['owner_name'] = col['Vehicle_owner'] #get the owner name
+                data['owner_contact'] = col['Contact_number'] #get the owner name
+                
                 #type
                 if col['Register_Vehicle_Type'] != data['type']: 
                     data['warnning_message'] +=f"<p>Invalid vehicle Type for this License Plate, the register type is <b>{col['Register_Vehicle_Type']}</b>.</p>"
@@ -155,7 +156,7 @@ def check_invalid_vehicle(data,path):
                 #exp lp
                 print(col['Road_tax_exp_date'])
                 date_now = datetime.today()
-                date_exp = datetime.strptime(col['Road_tax_exp_date'], '%Y-%m-%d')
+                date_exp = parse_date(col['Road_tax_exp_date'])
                 between_date = date_exp - date_now
                 
                 if  between_date.days < 0: 
@@ -196,7 +197,26 @@ def get_the_most_frequent(predict_list):
     # Find the element with the highest frequency
     max_freq_elem = max(freq, key=freq.get)
     return max_freq_elem
-               
+
+def parse_date(date_str):
+    """function to change the date format
+
+    Args:
+        date_str (str): input
+
+    Raises:
+        ValueError: _description_
+
+    Returns:
+        _type_: _description_
+    """
+    for fmt in ('%d/%m/%Y', '%Y-%m-%d'):
+        try:
+            return datetime.strptime(date_str, fmt)
+        except ValueError:
+            continue
+    raise ValueError(f"Date {date_str} does not match any expected format")
+             
 class Load_Object():
     """Load the nessasry item
     """
