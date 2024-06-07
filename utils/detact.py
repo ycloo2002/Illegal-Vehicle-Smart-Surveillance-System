@@ -89,12 +89,12 @@ def insert_csv(csv_path,data):
 
     Args:
         no (int): the no 
-        data (dictionary): contain all the result data
+        data (dict): contain all the result data
         csv_path (str): the input csv file path
     """
-    
     with open(csv_path, 'a', newline='') as csvfile:
-        writer = csv.writer(csvfile)
+        fieldnames= ['No','license_plate','type','brand','colour','warnning_message',"owner_name","owner_contact",'img_path']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writerow(data)   
     
 def create_csv(path):
@@ -110,59 +110,11 @@ def create_csv(path):
     
     with open(csv_file_path, 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
-        writer.writerow(['No','Plate_number', 'Type','Brand','Colour','Message'])
+        writer.writerow(['No','license_plate','type','brand','colour','warnning_message',"owner_name","owner_contact",'img_path'])
         print(f"CSV file '{csv_file_path}' successful create.")
         
     return csv_file_path
-            
-def insert_table_info(table,data,invalid=False):
-    """Insert data to the result gui. 
-    If the invalid = True, adding to the warnning message table. 
-    If invalid = False, insert to defalut table
-
-    Args:
-        table (_type_): GUI class
-        data (dictionary): contain all the result data
-        invalid (bool, optional): insert to warnning table or not. Defaults to False.
-    """
-    if invalid : choice = table.table_warnning 
-    else : choice = table.table_info
-    
-    row_count = choice.rowCount()
-    choice.insertRow(row_count)
-    
-    #insert image
-    item = QTableWidgetItem()
-    pixmap = QPixmap(data['img_path']).scaled(200, 200)  # Resize the image
-    icon = QIcon(pixmap)
-    item.setIcon(icon)
-
-    choice.setIconSize(pixmap.size())
-
-    # Set a fixed size hint for the item to ensure it is displayed properly
-    item.setSizeHint(pixmap.size())
-        
-    choice.setItem(row_count, 0, item)
-        
-    # Optionally set row height and column width to ensure the image fits
-    choice.setRowHeight(row_count, 210)
-    choice.setColumnWidth(0, 210)
-    
-    choice.setItem(row_count, 1, QTableWidgetItem(data['license_plate'])) # column display license plate
-    choice.setItem(row_count, 2, QTableWidgetItem(data['type'])) # column display vehicle type
-    choice.setItem(row_count, 3, QTableWidgetItem(data['brand'])) # column display vehicle brand
-    choice.setItem(row_count, 4, QTableWidgetItem(data['colour'])) # column display vehicle colour
-    
-    if invalid:
-        # column display warnning message
-        label= QLabel(data['warnning_message'])
-        label.setTextFormat(Qt.RichText)  
-        label.setAutoFillBackground(False)
-        label.setStyleSheet("background-color: red;") 
-        choice.setCellWidget(row_count, 5, label) 
-        
-        choice.setItem(row_count, 6, QTableWidgetItem(data['owner_name']))# column display onwer of vehicle
-                                     
+                                             
 def check_invalid_vehicle(data,path):
     """check the illegal vehicle and return any warnning message
 
@@ -240,7 +192,6 @@ class Load_Object():
         load.brand_detection = YOLO(f'{utils_basedir}/model/brand_v4.pt')
         print("\nSuccessfully load brand model")
         
-    
         # Load the model for color recorigse
         color_model = models.googlenet(pretrained=False, aux_logits=True)  # Set aux_logits to True to match the saved model
         num_ftrs = color_model.fc.in_features
@@ -264,9 +215,6 @@ class Load_Object():
         load.reader = easyocr.Reader(['en'], gpu=True)
         print("\nSuccessfully load reader model")
         
-        #load.vehicles = {2:"car",5:'bus', 7:'truck'} # 2: 'car' ,3: 'motorcycle', 5: 'bus', 7: 'truck'
-        #print("\n Successfully load vehicle : ",load.vehicles)
-        
         #brand define
         #load.brand= ['Audi', 'Chrysler', 'Citroen', 'GMC', 'Honda', 'Hyundai', 'Infiniti', 'Mazda', 'Mercedes', 'Mercury', 'Mitsubishi', 'Nissan', 'Renault', 'Toyota', 'Volkswagen', 'acura', 'bmw', 'cadillac', 'chevrolet', 'dodge', 'ford', 'jeep', 'kia', 'lexus', 'lincoln', 'mini', 'porsche', 'ram', 'range rover', 'skoda', 'subaru', 'suzuki', 'volvo','Proton','Perodua','no class']
         #print("\nSuccessfully load brand class : ",load.brand)
@@ -284,6 +232,7 @@ class Detection(QObject):
         Include the running detection with live,video and image.
     """
     warnning = Signal(str)
+    insert_data = Signal(dict,bool)
     finish = Signal(str)
     
     def __init__(load,define_object,source_path):
@@ -356,15 +305,14 @@ class Detection(QObject):
         
         vehicle_detect =""
         car_results = load.vehicel_model(frame,classes=[2,3,5,7])[0]
-        
+        vehicles = {2:"car",5:'bus', 7:'truck'} 
         for detection in car_results.boxes.data.tolist():
             cx1,cy1, cx2, cy2, pscore, classid = detection 
             if classid == 3:
                 break
             
             if plate[0] >= cx1 and plate[1] >= cy1 and plate[2] <= cx2 and plate[3] <= cy2:
-                print(classid)
-                vehicle_detect = [cx1,cy1, cx2, cy2, classid]
+                vehicle_detect = [cx1,cy1, cx2, cy2, vehicles[classid]]
                 break
                 
         return vehicle_detect
@@ -488,6 +436,11 @@ class Detection(QObject):
         
         if len(plate_detect) > 0: #continue when any return value from the search_plate function
             
+            #save result to both array
+            #when gettin
+            
+            
+            
             for plate in plate_detect:
                 
                 load.save_plate.append(plate[4]) #save the lp
@@ -529,22 +482,27 @@ class Detection(QObject):
                             
                     #save the image with the lp name.                                        
                     cv2.imwrite(img_path, vehicle_crop)  
-                                
-                    insert_table_info(load.gui,result_data) # adding result to the gui
+                    
+                    load.insert_data.emit(result_data,False)            
+                    #insert_table_info(load.gui,result_data) # adding result to the gui
                                     
                     #check the illger vehicle and return warnning message if illger
                     invalid,result_data = check_invalid_vehicle(result_data,load.database_path)
                                     
                     if invalid:
-                        insert_table_info(load.gui,result_data,invalid)
+                        load.insert_data.emit(result_data,invalid)     
+                        #insert_table_info(load.gui,result_data,invalid)
                         load.total_warnning +=1
                                     
                     #insert data to the csv file
                     insert_csv(load.csv_file_path,result_data)
                                 
                     QApplication.processEvents() 
+                    return 0
                     #drawbox(new_frame,int(vehicle[0]),int(vehicle[2]),int(vehicle[1]),int(vehicle[3]),f'{plate[4]}',(255, 0, 0), 5) 
-                                                                                                                         
+        
+        return  5                                                                                                                
+    
     @Slot()
     def video_detaction(load):
         """This is the video detection function.It will get the input and covert the video to frame. Each frame will be call the run_detection to get the detection.
@@ -573,7 +531,7 @@ class Detection(QObject):
         load.save_plate = []   
         load.total_warnning = 0
         load.lp_5_most = deque(maxlen=5)
-         
+        skip_frame = 0 
         # Loop through the video frames
         while cap.isOpened():
             
@@ -586,10 +544,12 @@ class Detection(QObject):
             success, frame = cap.read()
 
             if success:
-                
-                load.vehicle_illegal_detection(frame) #call the function and return the new_version_frame
-                load.gui.runing_text.setText(f"Loading. \n Total {len(load.save_plate)} vehicle detacted and \n{load.total_warnning} is detacted as illegel vehicle.")    
-                                                     
+                if skip_frame != 0: 
+                    skip_frame -= 1
+                    print("skip_frame")
+                else :
+                    skip_frame=load.vehicle_illegal_detection(frame) #call the function and return the new_version_frame
+                    load.gui.runing_text.setText(f"Loading. \n Total {len(load.save_plate)} vehicle detacted and \n{load.total_warnning} is detacted as illegel vehicle.")                                     
                 #out.write(new_frame)# add the frame to the video.
             else:
                 # Break the loop if the end of the video is reached
@@ -607,7 +567,8 @@ class Detection(QObject):
         print("\nProgram running time:", running_time/60, "minutes")
         
         load.gui.runing_text.setText(f"End,Total {len(load.save_plate)} vehicle detacted and \n{load.total_warnning} is detacted as illegel vehicle \nTime Taken : {round(running_time/60 , 2)} minutes")
-        load.gui.text_container.setStyleSheet("background-color:lightgreen;")
+        load.gui.text_container.setStyleSheet("background-color:transparent;")
+        load.gui.runing_text.setStyleSheet("color:black")
         load.gui.result_home_btn.setEnabled(True)
         load.gui.stop_running_btn.setEnabled(False)
         load.finish.emit(load.folder_name)
