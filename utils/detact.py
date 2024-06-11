@@ -9,6 +9,7 @@ import torch.nn as nn
 import torchvision.transforms as transforms
 import torchvision.models as models
 import matplotlib
+import numpy as np
 from datetime import datetime
 from ultralytics import YOLO
 from PIL import Image
@@ -20,6 +21,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
     QLabel
 )
+from imgaug import augmenters as iaa
 
 # Force matplotlib to not use any backend.
 matplotlib.use('Agg')
@@ -216,7 +218,28 @@ def parse_date(date_str):
         except ValueError:
             continue
     raise ValueError(f"Date {date_str} does not match any expected format")
-             
+
+def preprocess_image(img):
+    
+    # Ensure the cropped image is in RGB format
+    image_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    
+    # Apply sharpening kernel
+    kernel = np.array([[0, -1, 0], 
+                       [-1, 5, -1], 
+                       [0, -1, 0]])
+    sharpened = cv2.filter2D(image_rgb, -1, kernel)
+    
+    # Adjust contrast and brightness
+    alpha = 2.0  # Contrast control (1.0-3.0)
+    beta = 0     # Brightness control (0-100)
+    adjusted = cv2.convertScaleAbs(sharpened, alpha=alpha, beta=beta)
+    
+    # Denoise the image
+    denoised = cv2.fastNlMeansDenoisingColored(adjusted, None, 10, 10, 7, 21)
+    
+    return denoised
+           
 class Load_Object():
     """Load the nessasry item
     """
@@ -233,7 +256,7 @@ class Load_Object():
         load.plate_detection = YOLO(f'{utils_basedir}/model/car_plate_v5.pt')
         print("\nSuccessfully load plate model")
         
-        load.brand_detection = YOLO(f'{utils_basedir}/model/brand_v4.pt')
+        load.brand_detection = YOLO(f'{utils_basedir}/model/brand.pt')
         print("\nSuccessfully load brand model")
         
         # Load the model for color recorigse
@@ -484,6 +507,9 @@ class Detection(QObject):
 
                         #crop the vehicle        
                         vehicle_crop = frame[int(vehicle_detect['y1']):int(vehicle_detect['y2']), int(vehicle_detect['x1']): int(vehicle_detect['x2'])]
+                        
+                        #apply prepocessing
+                        #pre_img = preprocess_image(vehicle_crop)
                         
                         #detect the brand
                         detect_brand = load.search_brand(vehicle_crop)  

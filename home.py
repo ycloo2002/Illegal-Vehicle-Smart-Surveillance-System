@@ -171,10 +171,10 @@ class MainWindow(QMainWindow):
         #layout.addLayout(container_layout)
         
         #title
-        title = QLabel("Choose Input Type")
-        title.setFont(QFont(FF, 18))
-        title.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title, alignment=Qt.AlignCenter)
+        #title = QLabel("Choose Input Type")
+        #title.setFont(QFont(FF, 18))
+        #title.setAlignment(Qt.AlignCenter)
+        #layout.addWidget(title, alignment=Qt.AlignCenter)
         
         
         #define the button style
@@ -458,8 +458,8 @@ class MainWindow(QMainWindow):
             else :  
                 
                 for folder in result_folder_path:
-                    total_detact=-1
-                    total_no_illeger=-1
+                    total_detact=0
+                    total_no_illeger=0
                     folder_name = os.path.basename(folder)
                     with open(f'{folder}/result.csv', 'r', newline='') as csvfile:
                         reader = csv.DictReader(csvfile)
@@ -468,7 +468,7 @@ class MainWindow(QMainWindow):
                             if row['warnning_message'] == "":
                                 total_no_illeger += 1
                                 
-                    total_illeger = total_detact - total_no_illeger -1
+                    total_illeger = total_detact - total_no_illeger
                     
                     row_count = self.table_history.rowCount()   
                     self.table_history.insertRow(row_count)
@@ -511,8 +511,8 @@ class MainWindow(QMainWindow):
         self.history_details_table.clearContents()  # Clear the cell contents
         self.history_details_table.setRowCount(0)
  
-        total_detact=-1
-        total_no_illeger=-1
+        total_detact=0
+        total_no_illeger=0
         with open(f'{folder_path}/result.csv', 'r', newline='') as csvfile:
             reader = csv.DictReader(csvfile)
             for col in reader:
@@ -541,14 +541,20 @@ class MainWindow(QMainWindow):
                 self.history_details_table.setItem(row_count, 3, QTableWidgetItem(col["brand"]))
                 self.history_details_table.setItem(row_count, 4, QTableWidgetItem(col["colour"]))
                     
-                label= QLabel(col["warnning_message"])
-                label.setTextFormat(Qt.RichText)  
-                label.setAutoFillBackground(False)
+                
+                
                 if col['warnning_message'] == "":
                     total_no_illeger += 1
+                    label= QLabel("No message")
+                    label.setTextFormat(Qt.RichText)  
+                    label.setAutoFillBackground(False)
                     label.setStyleSheet("background-color: lightgreen;") 
                 else:
+                    label= QLabel(col["warnning_message"])
+                    label.setTextFormat(Qt.RichText)  
+                    label.setAutoFillBackground(False)
                     label.setStyleSheet("background-color: red;") 
+                    
                 self.history_details_table.setCellWidget(row_count, 5, label)  
                 
                 self.history_details_table.setItem(row_count, 6, QTableWidgetItem(col["owner_name"]))
@@ -556,7 +562,7 @@ class MainWindow(QMainWindow):
                 
                 total_detact += 1
                   
-        total_illeger = total_detact - total_no_illeger -1
+        total_illeger = total_detact - total_no_illeger
         
         row_count = self.history_details_table.rowCount()
         self.history_details_table.insertRow(row_count)  
@@ -615,6 +621,9 @@ class MainWindow(QMainWindow):
                     
         self.table_info.clearContents()  # Clear the cell contents
         self.table_info.setRowCount(0)
+        
+        self.result_home_btn.setEnabled(False)
+        self.stop_running_btn.setEnabled(True)
                     
         self.stacked_widget.setCurrentIndex(2)
         
@@ -658,6 +667,9 @@ class MainWindow(QMainWindow):
                     self.table_info.clearContents()  # Clear the cell contents
                     self.table_info.setRowCount(0)
                     
+                    self.result_home_btn.setEnabled(False)
+                    self.stop_running_btn.setEnabled(True)
+                    
                     self.stacked_widget.setCurrentIndex(2)
 
                     self.run_detaction = Detection(self,file_path)
@@ -677,6 +689,9 @@ class MainWindow(QMainWindow):
                     
                     self.table_info.clearContents()  # Clear the cell contents
                     self.table_info.setRowCount(0)
+                    
+                    self.result_home_btn.setEnabled(False)
+                    self.stop_running_btn.setEnabled(True)
                     
                     self.stacked_widget.setCurrentIndex(2)
 
