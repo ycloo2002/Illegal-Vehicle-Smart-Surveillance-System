@@ -17,14 +17,13 @@ if __name__ == '__main__':
 
 
     # Load a YOLOv8 model, pretrained on COCO
-    model = YOLO('yolov8m.pt')  # or 'yolov8m.pt', 'yolov8l.pt', etc. for different sizes
+    model = YOLO('yolov8s.pt')  # or 'yolov8m.pt', 'yolov8l.pt', etc. for different sizes
 
     # Train the model
     model.train(data=dataset_yaml, epochs=50, batch=16, imgsz=640, 
-                workers=4, device=0, project='runs/train', name='exp', 
+                workers=4, device=0,
                 pretrained=True, optimizer='Adam', lr0=0.01, weight_decay=0.0005, 
                 momentum=0.937, patience=5, verbose=True)
-
     # Evaluate the model
     metrics = model.val(data=dataset_yaml)
     print(metrics)

@@ -14,14 +14,11 @@ from datetime import datetime
 from ultralytics import YOLO
 from PIL import Image
 from collections import deque, defaultdict
-from PySide6.QtGui import QPixmap, QIcon,QImage
-from PySide6.QtCore import QObject,Slot,Signal, QMutex, QMutexLocker,Qt
+from PySide6.QtGui import QPixmap,QImage
+from PySide6.QtCore import QObject,Slot,Signal, QMutex, QMutexLocker
 from PySide6.QtWidgets import (
-    QApplication,
-    QTableWidgetItem,
-    QLabel
+    QApplication
 )
-from imgaug import augmenters as iaa
 
 # Force matplotlib to not use any backend.
 matplotlib.use('Agg')
@@ -137,23 +134,23 @@ def check_invalid_vehicle(data,path):
         reader = csv.DictReader(csvfile)
         for col in reader:
             
-            if col['Licence_Plate_Number'] == data['license_plate']: # true in vehicle plate 
+            if str(col['Licence_Plate_Number']).upper() == data['license_plate']: # true in vehicle plate 
                 found_lp = True
                 
-                data['owner_name'] = col['Vehicle_owner'] #get the owner name
+                data['owner_name'] = str(col['Vehicle_owner']).upper() #get the owner name
                 data['owner_contact'] = col['Contact_number'] #get the owner name
                 
                 #type
-                if col['Register_Vehicle_Type'] != data['type']: 
-                    data['warnning_message'] +=f"<p>Invalid vehicle Type for this License Plate, the register type is <b>{col['Register_Vehicle_Type']}</b>.</p>"
+                if str(col['Register_Vehicle_Type']).upper() != data['type']: 
+                    data['warnning_message'] +=f"<p>Invalid vehicle Type for this License Plate, the register type is <b>{str(col['Register_Vehicle_Type']).upper()}</b>.</p>"
                 
                 #brand
-                if col['Register_Vehicle_Brand'] != data['brand']: 
-                    data['warnning_message'] +=f"<p>Invalid vehicle brand for this License Plate, the register brand is <b>{col['Register_Vehicle_Brand']}</b>.</p>"
+                if str(col['Register_Vehicle_Brand']).upper() != data['brand']: 
+                    data['warnning_message'] +=f"<p>Invalid vehicle brand for this License Plate, the register brand is <b>{str(col['Register_Vehicle_Brand']).upper()}</b>.</p>"
                 
                 #color
-                if col['Register_Vehicle_Colour'] != data['colour']: 
-                    data['warnning_message'] += f"<p>Invalid vehicle colour for this License Plate, the register colour is <b>{col['Register_Vehicle_Colour']}</b>.</p>"
+                if str(col['Register_Vehicle_Colour']).upper() != data['colour']: 
+                    data['warnning_message'] += f"<p>Invalid vehicle colour for this License Plate, the register colour is <b>{str(col['Register_Vehicle_Colour']).upper()}</b>.</p>"
                     
                 #exp lp
                 print(col['Road_tax_exp_date'])
@@ -218,28 +215,7 @@ def parse_date(date_str):
         except ValueError:
             continue
     raise ValueError(f"Date {date_str} does not match any expected format")
-
-def preprocess_image(img):
-    
-    # Ensure the cropped image is in RGB format
-    image_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    
-    # Apply sharpening kernel
-    kernel = np.array([[0, -1, 0], 
-                       [-1, 5, -1], 
-                       [0, -1, 0]])
-    sharpened = cv2.filter2D(image_rgb, -1, kernel)
-    
-    # Adjust contrast and brightness
-    alpha = 2.0  # Contrast control (1.0-3.0)
-    beta = 0     # Brightness control (0-100)
-    adjusted = cv2.convertScaleAbs(sharpened, alpha=alpha, beta=beta)
-    
-    # Denoise the image
-    denoised = cv2.fastNlMeansDenoisingColored(adjusted, None, 10, 10, 7, 21)
-    
-    return denoised
-           
+         
 class Load_Object():
     """Load the nessasry item
     """
@@ -259,15 +235,26 @@ class Load_Object():
         load.brand_detection = YOLO(f'{utils_basedir}/model/brand.pt')
         print("\nSuccessfully load brand model")
         
-        # Load the model for color recorigse
+        # Check if CUDA is available and set the device accordingly
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print(f"Using device: {device}")
+
+        # Load the GoogLeNet model with auxiliary logits
         color_model = models.googlenet(pretrained=False, aux_logits=True)  # Set aux_logits to True to match the saved model
+        # Modify the fully connected layers to match the number of classes in your dataset
         num_ftrs = color_model.fc.in_features
         color_model.fc = nn.Linear(num_ftrs, 15)  # Adjust num_classes to match your dataset
         color_model.aux1.fc2 = nn.Linear(color_model.aux1.fc2.in_features, 15)
         color_model.aux2.fc2 = nn.Linear(color_model.aux2.fc2.in_features, 15)
-        model_path = f'{utils_basedir}/model/colour.pth'
-        color_model.load_state_dict(torch.load(model_path))
-        color_model.eval()  # Set the model to evaluation mode
+        # Load the saved model weights, mapping to the correct device
+        model_path = f'{utils_basedir}/model/colour.pth'  # Adjust path as necessary
+        color_model.load_state_dict(torch.load(model_path, map_location=device))
+        # Move the model to the appropriate device
+        color_model.to(device)
+        # Set the model to evaluation mode
+        color_model.eval()
+        # Store the model and transformation pipeline in a load object (assuming load is defined)
+        
         load.color_model = color_model
         load.transform = transforms.Compose([
             transforms.Resize(256),
@@ -275,15 +262,12 @@ class Load_Object():
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
+
         print("\nSuccessfully load colour model")
         
         # Initialize the OCR reader
-        load.reader = easyocr.Reader(['en'], gpu=True)
+        load.reader = easyocr.Reader(['en'],gpu=True)
         print("\nSuccessfully load reader model")
-        
-        #brand define
-        #load.brand= ['Audi', 'Chrysler', 'Citroen', 'GMC', 'Honda', 'Hyundai', 'Infiniti', 'Mazda', 'Mercedes', 'Mercury', 'Mitsubishi', 'Nissan', 'Renault', 'Toyota', 'Volkswagen', 'acura', 'bmw', 'cadillac', 'chevrolet', 'dodge', 'ford', 'jeep', 'kia', 'lexus', 'lincoln', 'mini', 'porsche', 'ram', 'range rover', 'skoda', 'subaru', 'suzuki', 'volvo','Proton','Perodua','no class']
-        #print("\nSuccessfully load brand class : ",load.brand)
         
         load.database_path = f'{utils_basedir}/database.csv'
         print("\nSuccessfully load Database path : ",load.database_path)
@@ -396,7 +380,7 @@ class Detection(QObject):
                 break
             
             if plate['x1'] >= cx1 and plate['y1'] >= cy1 and plate['x2'] <= cx2 and plate['y2'] <= cy2:
-                vehicle_detect = {"x1":cx1,"y1":cy1,"x2":cx2,"y2":cy2,"type":vehicles[classid]}
+                vehicle_detect = {"x1":cx1,"y1":cy1,"x2":cx2,"y2":cy2,"type":str(vehicles[classid]).upper()}
                 break
                 
         return vehicle_detect
@@ -441,7 +425,8 @@ class Detection(QObject):
         for detection in brand_detaction_results.boxes.data.tolist():
             bx1,by1, bx2, by2, bscore, bclassid = detection
 
-            return load.brand_detection.names[int(bclassid)]
+            brand_name = str(load.brand_detection.names[int(bclassid)])
+            return brand_name.upper()
 
         return "Error"
             
@@ -455,20 +440,24 @@ class Detection(QObject):
         Returns:
             str: colour
         """
-        
+        device = next(load.color_model.parameters()).device
+         
         colour_class = ['beige','black','blue','brown','gold','green','grey','orange','pink','purple','red','silver','tan','white','yellow']
         
         pil_image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
         
         image = load.transform(pil_image).unsqueeze(0)  # Add batch dimension
 
+        image = image.to(device)
+        
         # Set the model to evaluation mode and make prediction
         load.color_model.eval()
+        
         with torch.no_grad():
             outputs = load.color_model(image)
             _, predicted = torch.max(outputs, 1)
 
-        return colour_class[predicted]
+        return colour_class[predicted].upper()
     
     def vehicle_illegal_detection(load,frame,img=False):
         """Function to call and run detection and prediction for the vehicle license plate,vehicle type,vehicle brand and vehicle colour.
@@ -507,9 +496,6 @@ class Detection(QObject):
 
                         #crop the vehicle        
                         vehicle_crop = frame[int(vehicle_detect['y1']):int(vehicle_detect['y2']), int(vehicle_detect['x1']): int(vehicle_detect['x2'])]
-                        
-                        #apply prepocessing
-                        #pre_img = preprocess_image(vehicle_crop)
                         
                         #detect the brand
                         detect_brand = load.search_brand(vehicle_crop)  
