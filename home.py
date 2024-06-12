@@ -1,7 +1,7 @@
 import sys
 from utils.detact import Detection,Load_Object
 from PySide6.QtCore import QSize, Qt,Slot,QThread
-from PySide6.QtGui import QFont,QIcon,QPixmap,QColor,QPainter
+from PySide6.QtGui import QFont,QIcon,QPixmap
 from functools import partial
 from PySide6.QtWidgets import (
     QApplication,
@@ -34,23 +34,8 @@ except ImportError:
 basedir = os.path.dirname(__file__)
 
 FF = 'Verdana'
-class Tee:
-    def __init__(self, *files):
-        self.files = files
+VERSION = "Beta 2.0"
 
-    def write(self, text):
-        for file in self.files:
-            if file is not None:
-                file.write(text)
-                file.flush()  # Ensure output is written immediately
-            else:
-                print("Warning: One of the file objects is None!")
-
-    def flush(self):
-        for file in self.files:
-            if file is not None:
-                file.flush()
-     
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -75,7 +60,7 @@ class MainWindow(QMainWindow):
         self.pervios_icon = f'{basedir}/utils/img/previous.png'
         
         self.setWindowTitle("Illegal Vehicle Smart Surveillance")
-        self.setStyleSheet("background-color: #add8e6;")
+        self.setStyleSheet("background-color: #e7feff;")
         
         # Create stacked widget to hold pages
         self.stacked_widget = QStackedWidget(self)
@@ -152,7 +137,7 @@ class MainWindow(QMainWindow):
         layout.addLayout(button_box)
         
         #version
-        version = QLabel("V 2.0 beta")
+        version = QLabel(VERSION)
         version.setFont(QFont(FF, 11))
         #version.setAlignment(Qt.AlignRight)
         version.setFixedSize(100, 20)
@@ -186,10 +171,10 @@ class MainWindow(QMainWindow):
         #layout.addLayout(container_layout)
         
         #title
-        title = QLabel("Choose Input Type")
-        title.setFont(QFont(FF, 18))
-        title.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title, alignment=Qt.AlignCenter)
+        #title = QLabel("Choose Input Type")
+        #title.setFont(QFont(FF, 18))
+        #title.setAlignment(Qt.AlignCenter)
+        #layout.addWidget(title, alignment=Qt.AlignCenter)
         
         
         #define the button style
@@ -282,9 +267,9 @@ class MainWindow(QMainWindow):
         
         
         self.table_warnning = QTableWidget()
-        self.table_warnning.setColumnCount(7)
+        self.table_warnning.setColumnCount(8)
         self.table_warnning.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.table_warnning.setHorizontalHeaderLabels(['Vehicle_Image',"License_Plate","Vehicle_Type", "Vehicle_Brand",'Vehicle_Colour','Warning Message','Vehicle_Onwner'])
+        self.table_warnning.setHorizontalHeaderLabels(['Vehicle_Image',"License_Plate","Vehicle_Type", "Vehicle_Brand",'Vehicle_Colour','Warning Message','Vehicle_Owner','Owner_contact'])
         self.table_warnning.setAlternatingRowColors(True)
         self.table_warnning.setStyleSheet(self.table_setting)
         
@@ -304,9 +289,9 @@ class MainWindow(QMainWindow):
         f_layout = QVBoxLayout(self.text_container)
         
         self.runing_text = QLabel("Loading")
-        self.runing_text.setFont(QFont(FF, 20))
+        self.runing_text.setFont(QFont(FF, 12))
         self.runing_text.setAlignment(Qt.AlignHCenter)
-        self.runing_text.setStyleSheet("text-align: center;margin: 10px 2px;color:white")
+        self.runing_text.setStyleSheet("text-align: center;color:white")
         
         f_layout.addWidget(self.runing_text)
         
@@ -319,7 +304,7 @@ class MainWindow(QMainWindow):
         self.stop_running_btn = QPushButton("Stop")
         self.stop_running_btn.clicked.connect(self.stop_task)
         self.stop_running_btn.setFont(QFont(FF, 12))
-        self.stop_running_btn.setFixedSize(150, 50)
+        self.stop_running_btn.setFixedSize(150, 30)
             
         button_style = """
                 QPushButton {
@@ -344,7 +329,7 @@ class MainWindow(QMainWindow):
         self.result_home_btn = QPushButton("Home")
         self.result_home_btn.clicked.connect(self.back_to_home)
         self.result_home_btn.setFont(QFont(FF, 12))
-        self.result_home_btn.setFixedSize(150, 50)
+        self.result_home_btn.setFixedSize(150, 30)
         self.result_home_btn.setEnabled(False)     
         button_style = """
                 QPushButton {
@@ -431,9 +416,9 @@ class MainWindow(QMainWindow):
         self.layout_history_details.addWidget(self.label_history_details_table)
         
         self.history_details_table = QTableWidget()
-        self.history_details_table.setColumnCount(6)
+        self.history_details_table.setColumnCount(8)
         self.history_details_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.history_details_table.setHorizontalHeaderLabels(['Vehicle_Image',"License_Plate","Vehicle_Type", "Vehicle_Brand",'Vehicle_Colour','Warning Message'])
+        self.history_details_table.setHorizontalHeaderLabels(['Vehicle_Image',"License_Plate","Vehicle_Type", "Vehicle_Brand",'Vehicle_Colour','Warning Message','Owner_name','Owner_contact'])
         self.history_details_table.setAlternatingRowColors(True)
         self.history_details_table.setStyleSheet(self.table_setting)
         
@@ -473,17 +458,17 @@ class MainWindow(QMainWindow):
             else :  
                 
                 for folder in result_folder_path:
-                    total_detact=-1
-                    total_no_illeger=-1
+                    total_detact=0
+                    total_no_illeger=0
                     folder_name = os.path.basename(folder)
                     with open(f'{folder}/result.csv', 'r', newline='') as csvfile:
-                        reader = csv.reader(csvfile)
+                        reader = csv.DictReader(csvfile)
                         for row in reader:
                             total_detact += 1
-                            if row[5] == "No error found.":
+                            if row['warnning_message'] == "":
                                 total_no_illeger += 1
                                 
-                    total_illeger = total_detact - total_no_illeger -1
+                    total_illeger = total_detact - total_no_illeger
                     
                     row_count = self.table_history.rowCount()   
                     self.table_history.insertRow(row_count)
@@ -526,45 +511,58 @@ class MainWindow(QMainWindow):
         self.history_details_table.clearContents()  # Clear the cell contents
         self.history_details_table.setRowCount(0)
  
-        total_detact=-1
-        total_no_illeger=-1
+        total_detact=0
+        total_no_illeger=0
         with open(f'{folder_path}/result.csv', 'r', newline='') as csvfile:
-            reader = csv.reader(csvfile)
+            reader = csv.DictReader(csvfile)
             for col in reader:
-                if col[0] != "No":
-                    row_count = self.history_details_table.rowCount()
-                    self.history_details_table.insertRow(row_count)
+                
+                row_count = self.history_details_table.rowCount()
+                self.history_details_table.insertRow(row_count)
                     
-                    img_path = f'{folder_path}/crop/{col[1]}.jpg'
+                img_path = col['img_path']
                     
-                    #insert image
-                    item = QTableWidgetItem()
-                    pixmap = QPixmap(img_path).scaled(100, 100)  # Resize the image
-                    icon = QIcon(pixmap)
-                    item.setIcon(icon)
-
-                    self.history_details_table.setIconSize(pixmap.size())
-
-                    # Set a fixed size hint for the item to ensure it is displayed properly
-                    item.setSizeHint(pixmap.size())
+                #insert image
+                item = QTableWidgetItem()
+                pixmap = QPixmap(img_path).scaled(200, 200)  # Resize the image
+                icon = QIcon(pixmap)
+                item.setIcon(icon)
+                self.history_details_table.setIconSize(pixmap.size())
+                # Set a fixed size hint for the item to ensure it is displayed properly
+                item.setSizeHint(pixmap.size())   
+                self.history_details_table.setItem(row_count, 0, item)
                         
-                    self.history_details_table.setItem(row_count, 0, item)
-                        
-                    # Optionally set row height and column width to ensure the image fits
-                    self.history_details_table.setRowHeight(row_count, 110)
-                    self.history_details_table.setColumnWidth(0, 110)
-                    self.history_details_table.setItem(row_count, 1, QTableWidgetItem(col[1]))
-                    self.history_details_table.setItem(row_count, 2, QTableWidgetItem(col[2]))
-                    self.history_details_table.setItem(row_count, 3, QTableWidgetItem(col[3]))
-                    self.history_details_table.setItem(row_count, 4, QTableWidgetItem(col[4]))
-                    self.history_details_table.setItem(row_count, 5, QTableWidgetItem(col[5]))
+                # Optionally set row height and column width to ensure the image fits
+                self.history_details_table.setRowHeight(row_count, 210)
+                self.history_details_table.setColumnWidth(0, 210)
+                
+                self.history_details_table.setItem(row_count, 1, QTableWidgetItem(col["license_plate"]))
+                self.history_details_table.setItem(row_count, 2, QTableWidgetItem(col["type"]))
+                self.history_details_table.setItem(row_count, 3, QTableWidgetItem(col["brand"]))
+                self.history_details_table.setItem(row_count, 4, QTableWidgetItem(col["colour"]))
                     
-                    total_detact += 1
-
-                    if col[5] == "No error found.":
-                        total_no_illeger += 1
-                        
-        total_illeger = total_detact - total_no_illeger -1
+                
+                
+                if col['warnning_message'] == "":
+                    total_no_illeger += 1
+                    label= QLabel("No message")
+                    label.setTextFormat(Qt.RichText)  
+                    label.setAutoFillBackground(False)
+                    label.setStyleSheet("background-color: lightgreen;") 
+                else:
+                    label= QLabel(col["warnning_message"])
+                    label.setTextFormat(Qt.RichText)  
+                    label.setAutoFillBackground(False)
+                    label.setStyleSheet("background-color: red;") 
+                    
+                self.history_details_table.setCellWidget(row_count, 5, label)  
+                
+                self.history_details_table.setItem(row_count, 6, QTableWidgetItem(col["owner_name"]))
+                self.history_details_table.setItem(row_count, 7, QTableWidgetItem(col["owner_contact"]))
+                
+                total_detact += 1
+                  
+        total_illeger = total_detact - total_no_illeger
         
         row_count = self.history_details_table.rowCount()
         self.history_details_table.insertRow(row_count)  
@@ -618,6 +616,15 @@ class MainWindow(QMainWindow):
         self.text_container.setStyleSheet("background-color:red;")
         QApplication.processEvents() 
         
+        self.table_warnning.clearContents()  # Clear the cell contents
+        self.table_warnning.setRowCount(0)
+                    
+        self.table_info.clearContents()  # Clear the cell contents
+        self.table_info.setRowCount(0)
+        
+        self.result_home_btn.setEnabled(False)
+        self.stop_running_btn.setEnabled(True)
+                    
         self.stacked_widget.setCurrentIndex(2)
         
         self.run_detaction = Detection(self,"")
@@ -629,6 +636,8 @@ class MainWindow(QMainWindow):
         self.worker_thread.start()
         
         self.run_detaction.warnning.connect(self.warnning_popout)
+        self.run_detaction.insert_data.connect(self.insert_table_info)  
+        self.run_detaction.pop_illegal.connect(self.detact_illegal)  
         self.run_detaction.finish.connect(self.detact_finish)  
                    
     def input_video_img(self):
@@ -652,27 +661,51 @@ class MainWindow(QMainWindow):
                 # Check if selected file is an image or a video
                 if any(lower_file_path.endswith(ext) for ext in (".png", ".jpg", ".jpeg", ".bmp", ".gif")):
                     print("Image file path",file_path)
+                    self.table_warnning.clearContents()  # Clear the cell contents
+                    self.table_warnning.setRowCount(0)
+                    
+                    self.table_info.clearContents()  # Clear the cell contents
+                    self.table_info.setRowCount(0)
+                    
+                    self.result_home_btn.setEnabled(False)
+                    self.stop_running_btn.setEnabled(True)
+                    
                     self.stacked_widget.setCurrentIndex(2)
 
                     self.run_detaction = Detection(self,file_path)
                     self.worker_thread = QThread()
                     
                     self.run_detaction.moveToThread(self.worker_thread)
-                    self.worker_thread.started.connect(self.run_detaction.image_detaction) 
+                    self.worker_thread.started.connect(self.run_detaction.image_detaction)
+                    self.run_detaction.insert_data.connect(self.insert_table_info)  
+                    self.run_detaction.pop_illegal.connect(self.detact_illegal)   
                     self.run_detaction.finish.connect(self.detact_finish)     
                     self.worker_thread.start()
                     
                 elif any(lower_file_path.endswith(ext) for ext in (".mp4", ".avi", ".mov")):
                     print(file_path)
+                    self.table_warnning.clearContents()  # Clear the cell contents
+                    self.table_warnning.setRowCount(0)
+                    
+                    self.table_info.clearContents()  # Clear the cell contents
+                    self.table_info.setRowCount(0)
+                    
+                    self.result_home_btn.setEnabled(False)
+                    self.stop_running_btn.setEnabled(True)
+                    
                     self.stacked_widget.setCurrentIndex(2)
 
                     self.run_detaction = Detection(self,file_path)
                     self.worker_thread = QThread()
 
                     self.run_detaction.moveToThread(self.worker_thread)
-                    self.worker_thread.started.connect(self.run_detaction.video_detaction)  
+                    self.worker_thread.started.connect(self.run_detaction.video_detaction)
+                    self.run_detaction.insert_data.connect(self.insert_table_info)  
+                    self.run_detaction.pop_illegal.connect(self.detact_illegal)  
                     self.run_detaction.finish.connect(self.detact_finish)  
                     self.worker_thread.start()
+                    
+                    
                 else:
                     print("Unsupported file format.")
                     self.warnning_popout("Unsupported file format.")
@@ -682,6 +715,7 @@ class MainWindow(QMainWindow):
         The function to stop the task and change the button enable at the result page. When the stop button click, the return home button will be enable and the stop button will be diable
         """
         self.run_detaction.stop()  # Signal the worker to stop
+        self.close_thread()
         self.result_home_btn.setEnabled(True)
         self.stop_running_btn.setEnabled(False)
     
@@ -704,7 +738,33 @@ class MainWindow(QMainWindow):
 
         if self.worker_thread.isRunning():                   
             self.close_thread()            
-                    
+    
+    @Slot(str)
+    def detact_illegal(self,message):
+        """alert the user with detect as illegal vehicle
+
+        Args:
+            message (str): the warnning message
+        """
+        
+        html_text = """
+                    <html>
+                    <head>
+                    </head>
+                    <body>
+                    <h2>Illegal vehicle found !!!</h2>
+                    """+message+"""
+                    </body>
+                    </html>
+        """
+
+        msg_box = QMessageBox()
+        msg_box.setIcon(QMessageBox.Information)
+        msg_box.setText(html_text)
+        msg_box.setWindowTitle("Illegal vehicle found !!!")
+        msg_box.setStandardButtons(QMessageBox.Ok)
+        msg_box.exec() 
+                        
     @Slot(str)
     def detact_finish(self,folder_name):
         """pop out the information message box to tell the user the detection is end and tell when the result is save.
@@ -720,7 +780,57 @@ class MainWindow(QMainWindow):
         msg_box.exec() 
         
         self.close_thread()
+    
+    @Slot(dict,bool)
+    def insert_table_info(self,data,invalid=False):
+        """Insert data to the result gui. 
+        If the invalid = True, adding to the warnning message table. 
+        If invalid = False, insert to defalut table
+
+        Args:
+            table (_type_): GUI class
+            data (dict): contain all the result data
+            invalid (bool, optional): insert to warnning table or not. Defaults to False.
+        """
+        if invalid : choice = self.table_warnning 
+        else : choice = self.table_info
         
+        row_count = choice.rowCount()
+        choice.insertRow(row_count)
+        
+        #insert image
+        item = QTableWidgetItem()
+        pixmap = QPixmap(data['img_path']).scaled(200, 200)  # Resize the image
+        icon = QIcon(pixmap)
+        item.setIcon(icon)
+
+        choice.setIconSize(pixmap.size())
+
+        # Set a fixed size hint for the item to ensure it is displayed properly
+        item.setSizeHint(pixmap.size())
+            
+        choice.setItem(row_count, 0, item)
+            
+        # Optionally set row height and column width to ensure the image fits
+        choice.setRowHeight(row_count, 210)
+        choice.setColumnWidth(0, 210)
+        
+        choice.setItem(row_count, 1, QTableWidgetItem(data['license_plate'])) # column display license plate
+        choice.setItem(row_count, 2, QTableWidgetItem(data['type'])) # column display vehicle type
+        choice.setItem(row_count, 3, QTableWidgetItem(data['brand'])) # column display vehicle brand
+        choice.setItem(row_count, 4, QTableWidgetItem(data['colour'])) # column display vehicle colour
+        
+        if invalid:
+            # column display warnning message
+            warnning_message= QLabel(data['warnning_message'])
+            warnning_message.setTextFormat(Qt.RichText)  
+            warnning_message.setAutoFillBackground(False)
+            warnning_message.setStyleSheet("background-color: red;") 
+            choice.setCellWidget(row_count, 5, warnning_message) 
+            
+            choice.setItem(row_count, 6, QTableWidgetItem(data['owner_name']))# column display onwer of vehicle
+            choice.setItem(row_count, 7, QTableWidgetItem(data['owner_contact']))# column display onwer of vehicle
+                
     def close_thread(self):
         """function to close the thread
         """
@@ -728,7 +838,23 @@ class MainWindow(QMainWindow):
         self.worker_thread.quit()
         self.worker_thread.wait()   
 
-                                     
+class Tee:
+    def __init__(self, *files):
+        self.files = files
+
+    def write(self, text):
+        for file in self.files:
+            if file is not None:
+                file.write(text)
+                file.flush()  # Ensure output is written immediately
+            else:
+                print("Warning: One of the file objects is None!")
+
+    def flush(self):
+        for file in self.files:
+            if file is not None:
+                file.flush()
+                                        
 if __name__ == "__main__":
     
     #setup_env.check_and_install_packages()
@@ -741,8 +867,6 @@ if __name__ == "__main__":
             original_stdout = sys.stdout
             original_stderr = sys.stderr
             sys.stdout = sys.stderr = Tee(sys.stdout, log_file)
-            
-            print("Starting application...")  # Debugging message
             
             app = QApplication(sys.argv)
             icon = f'{basedir}/utils/img/icon.ico'
@@ -763,3 +887,32 @@ if __name__ == "__main__":
         with open('Log File.log', 'a') as log_file:
             log_file.write(f"An error occurred: {str(e)}\n")
         sys.exit(1)
+        
+    """
+    #for apllication use. Delete the above and class tee, then uncomment this 
+    try:
+        # Redirect stdout and stderr to a file
+        with open('Log File.log', 'w') as log_file:
+            # Duplicate stdout and stderr to the console and the log file
+            
+            sys.stdout = log_file
+            sys.stderr = log_file
+            
+            app = QApplication(sys.argv)
+            icon = f'{basedir}/utils/img/icon.ico'
+            app.setWindowIcon(QIcon(icon))
+            window = MainWindow()
+            window.setMinimumSize(QSize(1000, 600)) 
+            window.show()
+            
+            # Execute the application
+            exit_code = app.exec()
+
+            sys.exit(exit_code)
+    except Exception as e:
+        # Handle and log any exceptions
+        with open('Log File.log', 'a') as log_file:
+            log_file.write(f"An error occurred: {str(e)}\n")
+        sys.exit(1)   
+        
+    """
