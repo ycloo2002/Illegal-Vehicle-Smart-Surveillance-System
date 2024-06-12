@@ -19,7 +19,7 @@ from PySide6.QtCore import QObject,Slot,Signal, QMutex, QMutexLocker
 from PySide6.QtWidgets import (
     QApplication
 )
-
+import logging
 # Force matplotlib to not use any backend.
 matplotlib.use('Agg')
     
@@ -153,7 +153,6 @@ def check_invalid_vehicle(data,path):
                     data['warnning_message'] += f"<p>Invalid vehicle colour for this License Plate, the register colour is <b>{str(col['Register_Vehicle_Colour']).upper()}</b>.</p>"
                     
                 #exp lp
-                print(col['Road_tax_exp_date'])
                 date_now = datetime.today()
                 date_exp = parse_date(col['Road_tax_exp_date'])
                 between_date = date_exp - date_now
@@ -222,23 +221,24 @@ class Load_Object():
     def __init__(load):
         super().__init__()
         utils_basedir = os.path.dirname(__file__)
-        
+        os.environ['PYTHONIOENCODING'] = 'utf-8'
         print("\nload the nessary item")
-        
+        logging.info("load the nessary item")
         # Load the model
         load.vehicel_model = YOLO(f'{utils_basedir}/model/yolov8s.pt')
         print("\nSuccessfully load vehicle model")
-        
+        logging.info("Successfully load vehicle model")
         load.plate_detection = YOLO(f'{utils_basedir}/model/car_plate_v5.pt')
         print("\nSuccessfully load plate model")
-        
+        logging.info("Successfully load plate model")
         load.brand_detection = YOLO(f'{utils_basedir}/model/brand.pt')
         print("\nSuccessfully load brand model")
+        logging.info("Successfully load brand model")
         
         # Check if CUDA is available and set the device accordingly
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"Using device: {device}")
-
+        logging.info(f"Using device: {device}")    
         # Load the GoogLeNet model with auxiliary logits
         color_model = models.googlenet(pretrained=False, aux_logits=True)  # Set aux_logits to True to match the saved model
         # Modify the fully connected layers to match the number of classes in your dataset
@@ -264,18 +264,21 @@ class Load_Object():
         ])
 
         print("\nSuccessfully load colour model")
+        logging.info("Successfully load colour model")
         
         # Initialize the OCR reader
         load.reader = easyocr.Reader(['en'],gpu=True)
-        print("\nSuccessfully load reader model")
+        print("Successfully load reader model")
+        logging.info("\nSuccessfully load reader model")
         
         load.database_path = f'{utils_basedir}/database.csv'
-        print("\nSuccessfully load Database path : ",load.database_path)
-        
+        print("Successfully load Database path : ",load.database_path)
+        logging.info("Successfully load Database path : %s",load.database_path)
         
         if not os.path.exists("result"):
             os.makedirs("result")
             print("Folder save created.")
+            logging.info("Folder save created.")
     
 class Detection(QObject):
     """ The main vehicle detection classes.
@@ -618,6 +621,7 @@ class Detection(QObject):
             QMutexLocker(load.mutex)  # Ensure thread-safe access to _is_running
             if not load._is_running:
                 print("Worker stopped.")
+                logging.info("Worker stopped.")
                 break
             
             # Read a frame from the video
@@ -643,7 +647,9 @@ class Detection(QObject):
         running_time =time.time()- start_time
 
         print(f"Total {len(load.save_plate)} vehicle detacted and {load.total_warnning} is detacted as illegel vehicle")
+        logging.info(f"Total {len(load.save_plate)} vehicle detacted and {load.total_warnning} is detacted as illegel vehicle")
         print("\nProgram running time:", running_time/60, "minutes")
+        logging.info(f"Program running time: {running_time/60} minutes")
         
         load.gui.runing_text.setText(f"End,Total {len(load.save_plate)} vehicle detacted and \n{load.total_warnning} is detacted as illegel vehicle \nTime Taken : {round(running_time/60 , 2)} minutes")
         load.gui.text_container.setStyleSheet("background-color:transparent;")
@@ -681,7 +687,9 @@ class Detection(QObject):
         running_time = end_time - start_time
         
         print(f"Total {len(load.save_plate)} vehicle detacted and {load.total_warnning} is detacted as illegel vehicle")
+        logging.info(f"Total {len(load.save_plate)} vehicle detacted and {load.total_warnning} is detacted as illegel vehicle")
         print("\nProgram running time:", running_time/60, "minutes")
+        logging.info(f"Program running time: {running_time/60} minutes")
         
         load.gui.runing_text.setText(f"End,Total {len(load.save_plate)} vehicle detacted and \n{load.total_warnning} is detacted as illegel vehicle \nTime Taken : {round(running_time/60 , 2)} minutes")
         load.gui.text_container.setStyleSheet("background-color:transparent;")
@@ -703,6 +711,7 @@ class Detection(QObject):
         load.save_plate = []  
         if not cap.isOpened():
             print("Error: Could not open video stream.")
+            logging.warning("Error: Could not open video stream.")
             load.warnning.emit("Unable to open the camera")
             
         else:
@@ -729,6 +738,7 @@ class Detection(QObject):
                 QMutexLocker(load.mutex)  # Ensure thread-safe access to _is_running
                 if not load._is_running:
                     print("Worker stopped.")
+                    logging.warning("Worker stopped.")
                     break
             
                 # Capture frame-by-frame
@@ -736,6 +746,7 @@ class Detection(QObject):
 
                 if not ret:
                     print("Failed to grab frame")
+                    logging.warning("Failed to grab frame")
                     load.warnning.emit("Failed to grab frame")
                     break
                        
@@ -756,7 +767,9 @@ class Detection(QObject):
             running_time = end_time - start_time
 
             print(f"Total {len(load.save_plate)} vehicle detacted and {load.total_warnning} is detacted as illegel vehicle")
+            logging.info(f"Total {len(load.save_plate)} vehicle detacted and {load.total_warnning} is detacted as illegel vehicle")
             print("\nProgram running time:", running_time/60, "minutes")
+            logging.info(f"Program running time: {running_time/60} minutes")
             
             load.gui.runing_text.setText(f"End,Total {len(load.save_plate)} vehicle detacted and \n{load.total_warnning} is detacted as illegel vehicle \nTime Taken : {round(running_time/60 , 2)} minutes")
             load.gui.text_container.setStyleSheet("background-color:transparent;")

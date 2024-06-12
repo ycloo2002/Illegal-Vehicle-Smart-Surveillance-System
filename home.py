@@ -21,8 +21,16 @@ from PySide6.QtWidgets import (
 )
 import os
 import csv
+import logging
 
-#import setup_env
+# Setup logging to a file
+logging.basicConfig(filename='Log File.log', 
+                    filemode='w', 
+                    level=logging.INFO,
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+# Create a logger
+logger = logging.getLogger(__name__)
 
 try:
     from ctypes import windll  # Only exists on Windows.
@@ -32,9 +40,9 @@ except ImportError:
     pass
 
 basedir = os.path.dirname(__file__)
-
 FF = 'Verdana'
 VERSION = "Beta 2.0"
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -451,6 +459,7 @@ class MainWindow(QMainWindow):
             
             if len(result_folder_path) == 0:
                 print("No history found")
+                logging.info("No history found")
                 self.table_history.setRowCount(1)     
                 self.table_history.setItem(0, 0, QTableWidgetItem("No history found")  )
                 self.table_history.setSpan(0, 0, 1, 4 - 1 + 1)
@@ -612,6 +621,7 @@ class MainWindow(QMainWindow):
         create detaction classes and call the live detection function.It will transfer the live detaction function to thread 
         """
         print("open camera")
+        logging.info("open camera")
         self.runing_text.setText(f"Loading")
         self.text_container.setStyleSheet("background-color:red;")
         QApplication.processEvents() 
@@ -649,6 +659,7 @@ class MainWindow(QMainWindow):
         QApplication.processEvents() 
         
         print("\nvideo/camera")
+        logging.info("\nvideo/camera")
         file_dialog = QFileDialog(self)
         file_dialog.setNameFilter("Video/Image (*.png *.jpg *.jpeg *.bmp *.gif *.mp4 *.avi *.mov)")
         file_dialog.setViewMode(QFileDialog.Detail)
@@ -661,6 +672,7 @@ class MainWindow(QMainWindow):
                 # Check if selected file is an image or a video
                 if any(lower_file_path.endswith(ext) for ext in (".png", ".jpg", ".jpeg", ".bmp", ".gif")):
                     print("Image file path",file_path)
+                    logging.info("Image file path",file_path)
                     self.table_warnning.clearContents()  # Clear the cell contents
                     self.table_warnning.setRowCount(0)
                     
@@ -684,6 +696,7 @@ class MainWindow(QMainWindow):
                     
                 elif any(lower_file_path.endswith(ext) for ext in (".mp4", ".avi", ".mov")):
                     print(file_path)
+                    logging.info(file_path)
                     self.table_warnning.clearContents()  # Clear the cell contents
                     self.table_warnning.setRowCount(0)
                     
@@ -708,6 +721,7 @@ class MainWindow(QMainWindow):
                     
                 else:
                     print("Unsupported file format.")
+                    logging.info("Unsupported file format.")
                     self.warnning_popout("Unsupported file format.")
 
     def stop_task(self):
@@ -838,81 +852,29 @@ class MainWindow(QMainWindow):
         self.worker_thread.quit()
         self.worker_thread.wait()   
 
-class Tee:
-    def __init__(self, *files):
-        self.files = files
+def run_application():
+    try:
+        app = QApplication(sys.argv)
+        icon = f'{basedir}/utils/img/icon.ico'
+        app.setWindowIcon(QIcon(icon))
+        window = MainWindow()
+        window.setMinimumSize(QSize(1000, 600)) 
+        window.show()
 
-    def write(self, text):
-        for file in self.files:
-            if file is not None:
-                file.write(text)
-                file.flush()  # Ensure output is written immediately
-            else:
-                print("Warning: One of the file objects is None!")
+        # Execute the application
+        exit_code = app.exec()
+        sys.exit(exit_code)
+    except Exception as e:
+        # Log exceptions
+        logger.exception("An error occurred: %s", e)
+        raise  # Re-raise the exception for further handling
 
-    def flush(self):
-        for file in self.files:
-            if file is not None:
-                file.flush()
-                                        
 if __name__ == "__main__":
-    
-    #setup_env.check_and_install_packages()
-    
     try:
-        # Redirect stdout and stderr to a file
-        with open('Log File.log', 'w') as log_file:
-            # Duplicate stdout and stderr to the console and the log file
-            
-            original_stdout = sys.stdout
-            original_stderr = sys.stderr
-            sys.stdout = sys.stderr = Tee(sys.stdout, log_file)
-            
-            app = QApplication(sys.argv)
-            icon = f'{basedir}/utils/img/icon.ico'
-            app.setWindowIcon(QIcon(icon))
-            window = MainWindow()
-            window.setMinimumSize(QSize(1000, 600)) 
-            window.show()
-            
-            # Execute the application
-            exit_code = app.exec()
-
-            sys.stdout = original_stdout
-            sys.stderr = original_stderr
-
-            sys.exit(exit_code)
+        logging.info("Start system")
+        run_application()
+        
     except Exception as e:
-        # Handle and log any exceptions
-        with open('Log File.log', 'a') as log_file:
-            log_file.write(f"An error occurred: {str(e)}\n")
+        # Log unexpected exceptions
+        logger.exception("Unexpected error occurred: %s", e)
         sys.exit(1)
-        
-    """
-    #for apllication use. Delete the above and class tee, then uncomment this 
-    try:
-        # Redirect stdout and stderr to a file
-        with open('Log File.log', 'w') as log_file:
-            # Duplicate stdout and stderr to the console and the log file
-            
-            sys.stdout = log_file
-            sys.stderr = log_file
-            
-            app = QApplication(sys.argv)
-            icon = f'{basedir}/utils/img/icon.ico'
-            app.setWindowIcon(QIcon(icon))
-            window = MainWindow()
-            window.setMinimumSize(QSize(1000, 600)) 
-            window.show()
-            
-            # Execute the application
-            exit_code = app.exec()
-
-            sys.exit(exit_code)
-    except Exception as e:
-        # Handle and log any exceptions
-        with open('Log File.log', 'a') as log_file:
-            log_file.write(f"An error occurred: {str(e)}\n")
-        sys.exit(1)   
-        
-    """
