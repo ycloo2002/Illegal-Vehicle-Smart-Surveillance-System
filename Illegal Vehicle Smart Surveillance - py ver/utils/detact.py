@@ -9,7 +9,6 @@ import torch.nn as nn
 import torchvision.transforms as transforms
 import torchvision.models as models
 import matplotlib
-import numpy as np
 from datetime import datetime
 from ultralytics import YOLO
 from PIL import Image
